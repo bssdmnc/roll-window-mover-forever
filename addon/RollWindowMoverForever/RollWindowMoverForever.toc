@@ -1,0 +1,9 @@
+## Interface: 16001, 11509
+## Title: Roll Window Mover Forever
+## Notes: Move and resize the Need / Greed / Pass loot roll window. Type /rollmove
+## Author: introqtua
+## Version: 1.0.0
+## SavedVariables: RollWindowMoverForeverDB
+## X-License: GPL-3.0
+
+RollWindowMoverForever.lua
