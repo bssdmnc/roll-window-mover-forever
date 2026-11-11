@@ -9,6 +9,7 @@ Made for WoW Forever (`_classic_beta_`, Interface 16001), also flagged for Class
 | --- | --- |
 | `/rollmove` | Show or hide the blue drag box |
 | `/rollmove scale 0.5-2` | Set the roll window scale |
+| `/rollmove test [1-5]` | Show 1 to 5 test loot roll windows (or hide them) |
 | `/rollmove reset` | Restore the default Blizzard position and scale |
 
 While the box is shown: drag it with the left mouse button, scroll to resize, right-click to lock.

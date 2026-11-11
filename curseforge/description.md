@@ -12,6 +12,7 @@ Move and resize the **Need / Greed / Pass** loot roll window. Made for **WoW For
 ## Commands
 
 - **/rollmove**: show or hide the drag box
+- **/rollmove test [1-5]**: preview 1 to 5 test roll windows (type again to hide)
 - **/rollmove scale 0.5-2**: set the scale
 - **/rollmove reset**: back to the default Blizzard position
 
