@@ -4,10 +4,10 @@ Move and resize the **Need / Greed / Pass** loot roll window. Made for **WoW For
 
 ## How to use
 
-1. Type **/rollmove**. A blue box appears where the roll window is.
-2. **Drag** it where you want the roll window.
-3. **Scroll** over the box to make the window bigger or smaller.
-4. **Right-click** the box (or type /rollmove again) to lock it.
+1. Type **/rollmove**. A 4-slot stack preview appears showing where the roll window sits and how items grow upwards.
+2. **Drag** any box to place the stack where you want.
+3. **Scroll** over any box to make the windows bigger or smaller.
+4. **Right-click** any box (or type /rollmove again) to lock it.
 
 ## Commands
 
@@ -18,6 +18,7 @@ Move and resize the **Need / Greed / Pass** loot roll window. Made for **WoW For
 
 ## Details
 
+- Shows full 4-item stack height so loot never overlaps UI or goes off-screen.
 - The position is saved for all characters on your account.
 - It is reapplied every time a new roll appears, also in combat.
 - Lightweight: no libraries, no options window, a single Lua file.
