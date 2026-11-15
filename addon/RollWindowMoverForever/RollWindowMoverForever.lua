@@ -41,6 +41,41 @@ local TEST_ITEMS = {
         quality = 2,
         icon = "Interface\\Icons\\INV_Potion_52",
     },
+    {
+        rollID = 987656,
+        id = 17182,
+        name = "Sulfuras, Hand of Ragnaros",
+        quality = 5,
+        icon = "Interface\\Icons\\INV_Hammer_Unique_Sulfuras",
+    },
+    {
+        rollID = 987657,
+        id = 32837,
+        name = "Warglaive of Azzinoth",
+        quality = 5,
+        icon = "Interface\\Icons\\INV_Weapon_Glave_01",
+    },
+    {
+        rollID = 987658,
+        id = 22691,
+        name = "Corrupted Ashbringer",
+        quality = 4,
+        icon = "Interface\\Icons\\INV_Sword_24",
+    },
+    {
+        rollID = 987659,
+        id = 50818,
+        name = "Invincible's Reins",
+        quality = 4,
+        icon = "Interface\\Icons\\Ability_Mount_Pegasus",
+    },
+    {
+        rollID = 987660,
+        id = 45693,
+        name = "Mimiron's Head",
+        quality = 4,
+        icon = "Interface\\Icons\\INV_Misc_Head_ClockworkGoblin_01",
+    },
 }
 
 local testItemsByRollID = {}
@@ -50,6 +85,11 @@ end
 
 local db
 local mover
+local minimapBtn
+local settingsFrame
+local combatHidden = false
+local stoppingTest = false
+local rollQueue = {}
 local applying = false
 local hooked = {}
 local blizzardPoints = {}
@@ -82,6 +122,24 @@ end
 local function IsTestRoll(rollID)
     local num = tonumber(rollID)
     return num ~= nil and testItemsByRollID[num] ~= nil
+end
+
+local function EnsureGroupLootFrames(count)
+    local targetCount = math.max(4, math.min(10, count or (db and db.maxItems) or 10))
+    for i = 5, targetCount do
+        local name = "GroupLootFrame" .. i
+        if not _G[name] then
+            pcall(function()
+                local f = CreateFrame("Frame", name, UIParent, "GroupLootFrameTemplate")
+                if f then
+                    f:SetID(i)
+                end
+            end)
+        end
+    end
+    if type(NUM_GROUP_LOOT_FRAMES) == "number" and NUM_GROUP_LOOT_FRAMES < targetCount then
+        NUM_GROUP_LOOT_FRAMES = targetCount
+    end
 end
 
 local function Targets()
@@ -144,18 +202,31 @@ local function ResizeMover()
     local spacing = 3 * db.scale
     mover:SetSize(w, h)
     if mover.slots then
-        for i = 2, 4 do
+        local maxVisible = math.max(1, math.min(10, db.maxItems or 4))
+        for i = 2, 10 do
             local slot = mover.slots[i]
             if slot then
                 slot:SetSize(w, h)
                 slot:ClearAllPoints()
                 local prev = (i == 2) and mover or mover.slots[i - 1]
                 slot:SetPoint("BOTTOM", prev, "TOP", 0, spacing)
+                if slot.text then
+                    if i == maxVisible then
+                        slot.text:SetText("Item " .. i .. "  ▲ Grows upwards ▲")
+                    else
+                        slot.text:SetText("Item " .. i)
+                    end
+                end
+                if i <= maxVisible then
+                    slot:Show()
+                else
+                    slot:Hide()
+                end
             end
         end
+        local extraHeight = (maxVisible - 1) * (h + spacing)
+        mover:SetClampRectInsets(0, 0, extraHeight, 0)
     end
-    local extraHeight = 3 * (h + spacing)
-    mover:SetClampRectInsets(0, 0, extraHeight, 0)
 end
 
 local function PlaceMover()
@@ -186,6 +257,9 @@ local function SetScale(value)
     db.scale = value
     ResizeMover()
     ApplyAll()
+    if settingsFrame and settingsFrame.Refresh then
+        settingsFrame:Refresh()
+    end
     return value
 end
 
@@ -194,7 +268,11 @@ local function Unlock()
         PlaceMover()
     end
     mover:Show()
+    ResizeMover()
     Print("unlocked. Drag any box, scroll to resize, right-click or /rollmove lock to save.")
+    if settingsFrame and settingsFrame.Refresh then
+        settingsFrame:Refresh()
+    end
 end
 
 local function Lock()
@@ -204,33 +282,9 @@ local function Lock()
     mover:Hide()
     SavePosition()
     Print("locked. Position saved.")
-end
-
-local function Reset()
-    db.point, db.relativePoint, db.x, db.y = nil, nil, nil, nil
-    db.scale = 1
-    mover:Hide()
-    ResizeMover()
-    for _, frame in ipairs(Targets()) do
-        frame:SetScale(1)
-        local saved = blizzardPoints[frame]
-        if saved then
-            applying = true
-            frame:ClearAllPoints()
-            frame:SetPoint(unpack(saved, 1, saved.n))
-            applying = false
-        end
+    if settingsFrame and settingsFrame.Refresh then
+        settingsFrame:Refresh()
     end
-    if not _G.GroupLootContainer then
-        local index = 2
-        local frame = _G["GroupLootFrame" .. index]
-        while frame do
-            frame:SetScale(1)
-            index = index + 1
-            frame = _G["GroupLootFrame" .. index]
-        end
-    end
-    Print("reset to the default Blizzard position.")
 end
 
 local function AllGroupLootFrames()
@@ -263,6 +317,40 @@ local function TestFrames()
     return list
 end
 
+local function ActiveRollFrames()
+    local list = {}
+    for _, frame in ipairs(AllGroupLootFrames()) do
+        if frame.IsShown and frame:IsShown() and frame.rollID then
+            list[#list + 1] = frame
+        end
+    end
+    return list
+end
+
+local function UpdateTestStackLayout()
+    local active = {}
+    for i = 1, 10 do
+        local frame = _G["GroupLootFrame" .. i]
+        if frame and frame:IsShown() and frame.rollID and IsTestRoll(frame.rollID) then
+            active[#active + 1] = frame
+        end
+    end
+    local spacing = 3
+    local prev = nil
+    applying = true
+    for _, frame in ipairs(active) do
+        frame:ClearAllPoints()
+        if not prev then
+            frame:SetPoint("BOTTOM", mover, "BOTTOM", 0, 0)
+        else
+            frame:SetPoint("BOTTOM", prev, "TOP", 0, spacing)
+        end
+        frame:SetScale(db.scale or 1)
+        prev = frame
+    end
+    applying = false
+end
+
 local function RestoreRollApi()
     if realRollOnLoot then
         RollOnLoot = realRollOnLoot
@@ -278,20 +366,37 @@ local function RestoreRollApi()
 end
 
 local function StopTest()
+    if stoppingTest then
+        return
+    end
+    stoppingTest = true
     testActive = false
-    for _, frame in ipairs(AllGroupLootFrames()) do
-        if frame.rollID and IsTestRoll(frame.rollID) or frame.rollID == 987654 then
+    rollQueue = {}
+    for i = 1, 10 do
+        local frame = _G["GroupLootFrame" .. i]
+        if frame then
             frame:Hide()
             frame.rollID = nil
         end
     end
     local container = _G.GroupLootContainer
     if container then
-        if type(GroupLootContainer_RemoveRoll) == "function" then
-            for _, item in ipairs(TEST_ITEMS) do
-                pcall(GroupLootContainer_RemoveRoll, container, item.rollID)
+        if type(container.rollFrames) == "table" then
+            local hasReal = false
+            for k, f in pairs(container.rollFrames) do
+                if type(f) == "table" and (not f.rollID or IsTestRoll(f.rollID)) then
+                    f:Hide()
+                    f.rollID = nil
+                    container.rollFrames[k] = nil
+                elseif f then
+                    hasReal = true
+                end
             end
-            pcall(GroupLootContainer_RemoveRoll, container, 987654)
+            if not hasReal then
+                container.maxIndex = 0
+            end
+        else
+            container.maxIndex = 0
         end
         if type(GroupLootContainer_Update) == "function" then
             pcall(GroupLootContainer_Update, container)
@@ -302,62 +407,43 @@ local function StopTest()
         pcall(StaticPopup_Hide, "LOOT_BIND_CONFIRM")
     end
     RestoreRollApi()
+    stoppingTest = false
 end
 
-local function DismissTestRoll(rollID, rollType)
-    local num = tonumber(rollID)
-    if not num or not testItemsByRollID[num] or dismissing[num] then
-        return
-    end
-    dismissing[num] = true
-
-    local testItem = testItemsByRollID[num]
-    local itemName = (testItem and testItem.resolvedName) or "item"
-    rollType = rollType or 0
-    if rollType == 1 then
-        Print(itemName .. ": Need")
-    elseif rollType == 2 then
-        Print(itemName .. ": Greed")
-    elseif rollType == 3 then
-        Print(itemName .. ": Disenchant")
-    elseif rollType == 4 then
-        Print(itemName .. ": Transmog")
-    else
-        Print(itemName .. ": Pass")
-    end
-
-    if StaticPopup_Hide then
-        pcall(StaticPopup_Hide, "CONFIRM_LOOT_ROLL")
-        pcall(StaticPopup_Hide, "LOOT_BIND_CONFIRM")
-    end
-
-    for _, f in ipairs({ GetFramesRegisteredForEvent("CANCEL_LOOT_ROLL") }) do
-        local handler = f ~= events and f:GetScript("OnEvent")
-        if handler then
-            pcall(handler, f, "CANCEL_LOOT_ROLL", num)
+local function Reset()
+    db.point, db.relativePoint, db.x, db.y = nil, nil, nil, nil
+    db.scale = 1
+    db.maxItems = 4
+    db.hideInCombat = true
+    db.showMinimapButton = true
+    mover:Hide()
+    StopTest()
+    PlaceMover()
+    ResizeMover()
+    for _, frame in ipairs(Targets()) do
+        frame:SetScale(1)
+        local saved = blizzardPoints[frame]
+        if saved then
+            applying = true
+            frame:ClearAllPoints()
+            frame:SetPoint(unpack(saved, 1, saved.n))
+            applying = false
         end
     end
-
-    local container = _G.GroupLootContainer
-    if container and type(GroupLootContainer_RemoveRoll) == "function" then
-        pcall(GroupLootContainer_RemoveRoll, container, num)
+    local index = 2
+    local frame = _G["GroupLootFrame" .. index]
+    while frame do
+        frame:SetScale(1)
+        index = index + 1
+        frame = _G["GroupLootFrame" .. index]
     end
-
-    for _, frame in ipairs(AllGroupLootFrames()) do
-        if tonumber(frame.rollID) == num then
-            frame:Hide()
-            frame.rollID = nil
-        end
+    if minimapBtn then
+        minimapBtn:Show()
     end
-
-    if container and type(GroupLootContainer_Update) == "function" then
-        pcall(GroupLootContainer_Update, container)
+    if settingsFrame and settingsFrame.Refresh then
+        settingsFrame:Refresh()
     end
-
-    if #TestFrames() == 0 then
-        StopTest()
-    end
-    dismissing[num] = nil
+    Print("reset to the default Blizzard position and settings.")
 end
 
 local function GetButtonRollType(btn)
@@ -429,7 +515,81 @@ local function HookTestButtons(frame)
     end
 end
 
+local origOpenNewFrame
+
+local function CheckRollQueue()
+    local maxAllowed = (db and db.maxItems) or 4
+    if testActive then
+        while #rollQueue > 0 and #TestFrames() < maxAllowed do
+            local nextRoll = table.remove(rollQueue, 1)
+            for i = 1, 10 do
+                local frame = _G["GroupLootFrame" .. i]
+                if frame and not frame:IsShown() then
+                    frame.rollID = nextRoll.rollID
+                    frame.rollTime = nextRoll.rollTime
+                    HookTestButtons(frame)
+                    frame:Show()
+                    break
+                end
+            end
+        end
+        UpdateTestStackLayout()
+    else
+        while #rollQueue > 0 and #ActiveRollFrames() < maxAllowed do
+            local nextRoll = table.remove(rollQueue, 1)
+            if nextRoll.isReal and origOpenNewFrame then
+                origOpenNewFrame(nextRoll.rollID, nextRoll.rollTime)
+            end
+        end
+    end
+end
+
+function DismissTestRoll(rollID, rollType)
+    local num = tonumber(rollID)
+    if not num or not testItemsByRollID[num] or dismissing[num] then
+        return
+    end
+    dismissing[num] = true
+
+    local testItem = testItemsByRollID[num]
+    local itemName = (testItem and testItem.resolvedName) or "item"
+    rollType = rollType or 0
+    if rollType == 1 then
+        Print(itemName .. ": Need")
+    elseif rollType == 2 then
+        Print(itemName .. ": Greed")
+    elseif rollType == 3 then
+        Print(itemName .. ": Disenchant")
+    elseif rollType == 4 then
+        Print(itemName .. ": Transmog")
+    else
+        Print(itemName .. ": Pass")
+    end
+
+    if StaticPopup_Hide then
+        pcall(StaticPopup_Hide, "CONFIRM_LOOT_ROLL")
+        pcall(StaticPopup_Hide, "LOOT_BIND_CONFIRM")
+    end
+
+    for _, frame in ipairs(AllGroupLootFrames()) do
+        if tonumber(frame.rollID) == num then
+            frame:Hide()
+            frame.rollID = nil
+        end
+    end
+
+    dismissing[num] = nil
+
+    CheckRollQueue()
+    UpdateTestStackLayout()
+
+    if #TestFrames() == 0 and #rollQueue == 0 then
+        StopTest()
+    end
+end
+
 local function StartTest(count)
+    EnsureGroupLootFrames(10)
     count = tonumber(count) or 1
     count = math.floor(math.min(#TEST_ITEMS, math.max(1, count)))
     StopTest()
@@ -487,8 +647,10 @@ local function StartTest(count)
     end
 
     testActive = true
+    local maxAllowed = db.maxItems or 4
+    local initialShow = math.min(count, maxAllowed)
 
-    for i = 1, count do
+    for i = 1, initialShow do
         local testItem = TEST_ITEMS[i]
         local frame = _G["GroupLootFrame" .. i]
         if frame then
@@ -496,30 +658,17 @@ local function StartTest(count)
             frame.rollTime = TEST_ROLL_TIME
             HookTestButtons(frame)
             frame:Show()
-            if _G.GroupLootContainer and type(GroupLootContainer_AddFrame) == "function" then
-                pcall(GroupLootContainer_AddFrame, _G.GroupLootContainer, frame)
-            end
-        else
-            local open = GroupLootContainer_AddRoll or GroupLootContainer_OpenNewFrame or GroupLootFrame_OpenNewFrame
-            if open then
-                pcall(open, testItem.rollID, TEST_ROLL_TIME)
-            else
-                for _, f in ipairs({ GetFramesRegisteredForEvent("START_LOOT_ROLL") }) do
-                    local handler = f ~= events and f:GetScript("OnEvent")
-                    if handler then
-                        pcall(handler, f, "START_LOOT_ROLL", testItem.rollID, TEST_ROLL_TIME)
-                    end
-                end
-            end
         end
     end
 
-    if _G.GroupLootContainer and type(GroupLootContainer_Update) == "function" then
-        pcall(GroupLootContainer_Update, _G.GroupLootContainer)
+    for i = initialShow + 1, count do
+        table.insert(rollQueue, { rollID = TEST_ITEMS[i].rollID, rollTime = TEST_ROLL_TIME })
     end
 
+    UpdateTestStackLayout()
+
     local frames = TestFrames()
-    if #frames == 0 then
+    if #frames == 0 and #rollQueue == 0 then
         StopTest()
         Print("could not open test roll window(s).")
         return
@@ -532,36 +681,39 @@ local function StartTest(count)
             frame:EnableMouseWheel(true)
             frame:RegisterForDrag("LeftButton")
             frame:HookScript("OnDragStart", function(self)
-                if IsTestRoll(self.rollID) or (mover and mover:IsShown()) then
-                    if mover then
-                        mover:StartMoving()
-                    end
+                if mover and mover:IsShown() then
+                    mover:StartMoving()
                 end
             end)
             frame:HookScript("OnDragStop", function(self)
-                if mover then
+                if mover and mover:IsShown() then
                     mover:StopMovingOrSizing()
                     SavePosition()
+                    UpdateTestStackLayout()
                 end
             end)
             frame:HookScript("OnMouseWheel", function(self, delta)
-                if IsTestRoll(self.rollID) or (mover and mover:IsShown()) then
-                    SetScale(db.scale + delta * SCALE_STEP)
-                end
+                SetScale(db.scale + delta * SCALE_STEP)
+                UpdateTestStackLayout()
             end)
         end
         if not hooked["test" .. tostring(frame)] then
             hooked["test" .. tostring(frame)] = true
             frame:HookScript("OnHide", function()
-                if #TestFrames() == 0 then
+                if stoppingTest or not testActive then
+                    return
+                end
+                CheckRollQueue()
+                UpdateTestStackLayout()
+                if #TestFrames() == 0 and #rollQueue == 0 then
                     StopTest()
                 end
             end)
         end
     end
 
-    ApplyAll()
-    Print("showing " .. #frames .. " test roll window(s). Click Need/Greed/Pass to test, or /rollmove test to hide.")
+    local queuedNotice = (#rollQueue > 0) and (" (" .. #rollQueue .. " in queue)") or ""
+    Print("showing " .. #frames .. " test roll window(s)" .. queuedNotice .. ". Click Need/Greed/Pass to test, or /rollmove test to hide.")
 end
 
 local function AddSlotBorder(slotFrame, r, g, b, a)
@@ -613,6 +765,7 @@ local function CreateMover()
     frame:SetScript("OnDragStop", function(self)
         self:StopMovingOrSizing()
         SavePosition()
+        UpdateTestStackLayout()
     end)
     frame:SetScript("OnMouseUp", function(_, button)
         if button == "RightButton" then
@@ -621,16 +774,11 @@ local function CreateMover()
     end)
     frame:SetScript("OnMouseWheel", function(_, delta)
         SetScale(db.scale + delta * SCALE_STEP)
+        UpdateTestStackLayout()
     end)
 
     frame.slots = {}
-    local slotData = {
-        [2] = { alpha = 0.22, text = "Item 2" },
-        [3] = { alpha = 0.16, text = "Item 3" },
-        [4] = { alpha = 0.10, text = "Item 4  ▲ Grows upwards ▲" },
-    }
-
-    for i = 2, 4 do
+    for i = 2, 10 do
         local slot = CreateFrame("Frame", nil, frame)
         slot:SetFrameStrata("MEDIUM")
         slot:SetFrameLevel(1)
@@ -638,14 +786,16 @@ local function CreateMover()
         slot:EnableMouseWheel(true)
         slot:RegisterForDrag("LeftButton")
 
+        local alpha = math.max(0.05, 0.26 - (i - 2) * 0.024)
         local bg = slot:CreateTexture(nil, "BACKGROUND")
         bg:SetAllPoints()
-        bg:SetColorTexture(0.1, 0.55, 1, slotData[i].alpha)
-        AddSlotBorder(slot, 0.2, 0.7, 1, slotData[i].alpha * 2)
+        bg:SetColorTexture(0.1, 0.55, 1, alpha)
+        AddSlotBorder(slot, 0.2, 0.7, 1, alpha * 2)
 
         local txt = slot:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         txt:SetPoint("CENTER")
-        txt:SetText(slotData[i].text)
+        txt:SetText("Item " .. i)
+        slot.text = txt
 
         slot:SetScript("OnDragStart", function()
             frame:StartMoving()
@@ -653,6 +803,7 @@ local function CreateMover()
         slot:SetScript("OnDragStop", function()
             frame:StopMovingOrSizing()
             SavePosition()
+            UpdateTestStackLayout()
         end)
         slot:SetScript("OnMouseUp", function(_, button)
             if button == "RightButton" then
@@ -661,6 +812,7 @@ local function CreateMover()
         end)
         slot:SetScript("OnMouseWheel", function(_, delta)
             SetScale(db.scale + delta * SCALE_STEP)
+            UpdateTestStackLayout()
         end)
 
         frame.slots[i] = slot
@@ -670,12 +822,290 @@ local function CreateMover()
     return frame
 end
 
+local function UpdateMinimapButtonPosition()
+    if not minimapBtn then
+        return
+    end
+    local angle = math.rad(db.minimapPos or 220)
+    local x = math.cos(angle) * 80
+    local y = math.sin(angle) * 80
+    minimapBtn:ClearAllPoints()
+    minimapBtn:SetPoint("CENTER", Minimap, "CENTER", x, y)
+    if db.showMinimapButton then
+        minimapBtn:Show()
+    else
+        minimapBtn:Hide()
+    end
+end
+
+local function MinimapButton_OnUpdate()
+    local mx, my = Minimap:GetCenter()
+    local px, py = GetCursorPosition()
+    local scale = Minimap:GetEffectiveScale()
+    px, py = px / scale, py / scale
+    local angle = math.deg(math.atan2(py - my, px - mx))
+    if angle < 0 then
+        angle = angle + 360
+    end
+    db.minimapPos = math.floor(angle + 0.5)
+    UpdateMinimapButtonPosition()
+end
+
+local function ToggleSettings()
+    if not settingsFrame then
+        return
+    end
+    if settingsFrame:IsShown() then
+        settingsFrame:Hide()
+    else
+        settingsFrame:Show()
+        if settingsFrame.Refresh then
+            settingsFrame:Refresh()
+        end
+    end
+end
+
+local function CreateMinimapButton()
+    local btn = CreateFrame("Button", "RollWindowMoverMinimapButton", Minimap)
+    btn:SetSize(31, 31)
+    btn:SetFrameStrata("MEDIUM")
+    btn:SetFrameLevel(8)
+    btn:RegisterForClicks("AnyUp")
+    btn:RegisterForDrag("LeftButton")
+    btn:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-Button-Highlight")
+
+    local overlay = btn:CreateTexture(nil, "OVERLAY")
+    overlay:SetSize(53, 53)
+    overlay:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
+    overlay:SetPoint("TOPLEFT")
+
+    local icon = btn:CreateTexture(nil, "BACKGROUND")
+    icon:SetSize(19, 19)
+    icon:SetTexture("Interface\\Buttons\\UI-GroupLoot-Dice-Up")
+    icon:SetPoint("CENTER", 0, 0)
+
+    btn:SetScript("OnDragStart", function(self)
+        self:SetScript("OnUpdate", MinimapButton_OnUpdate)
+    end)
+    btn:SetScript("OnDragStop", function(self)
+        self:SetScript("OnUpdate", nil)
+    end)
+    btn:SetScript("OnClick", function(_, button)
+        if IsShiftKeyDown() then
+            if testActive then
+                StopTest()
+                Print("test roll window(s) hidden.")
+            else
+                StartTest(db.maxItems or 4)
+            end
+        elseif button == "RightButton" then
+            ToggleSettings()
+        else
+            if mover:IsShown() then
+                Lock()
+            else
+                Unlock()
+            end
+        end
+    end)
+    btn:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+        GameTooltip:AddLine(TITLE)
+        GameTooltip:AddLine("Left-click: Unlock / Lock anchor", 1, 1, 1)
+        GameTooltip:AddLine("Right-click: Open Settings", 1, 1, 1)
+        GameTooltip:AddLine("Shift + Left-click: Toggle test rolls", 1, 1, 1)
+        GameTooltip:AddLine("Drag: Move around Minimap", 0.7, 0.7, 0.7)
+        GameTooltip:Show()
+    end)
+    btn:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+    end)
+
+    return btn
+end
+
+local function CreateSettingsUI()
+    local frame = CreateFrame("Frame", "RollWindowMoverSettingsFrame", UIParent)
+    frame:SetSize(360, 390)
+    frame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+    frame:SetFrameStrata("DIALOG")
+    frame:SetClampedToScreen(true)
+    frame:SetMovable(true)
+    frame:EnableMouse(true)
+    frame:RegisterForDrag("LeftButton")
+    frame:SetScript("OnDragStart", frame.StartMoving)
+    frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
+
+    local bg = frame:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints()
+    bg:SetColorTexture(0.08, 0.09, 0.12, 0.96)
+    AddSlotBorder(frame, 0.2, 0.6, 1, 0.8)
+
+    local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    title:SetPoint("TOP", 0, -14)
+    title:SetText(TITLE .. " Settings")
+
+    local closeBtn = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
+    closeBtn:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -3, -3)
+    closeBtn:SetScript("OnClick", function()
+        frame:Hide()
+    end)
+
+    local lockBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    lockBtn:SetSize(150, 26)
+    lockBtn:SetPoint("TOPLEFT", frame, "TOPLEFT", 20, -42)
+    lockBtn:SetScript("OnClick", function()
+        if mover:IsShown() then
+            Lock()
+        else
+            Unlock()
+        end
+    end)
+
+    local resetBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    resetBtn:SetSize(150, 26)
+    resetBtn:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -20, -42)
+    resetBtn:SetText("Reset Defaults")
+    resetBtn:SetScript("OnClick", function()
+        Reset()
+    end)
+
+    local sep1 = frame:CreateTexture(nil, "ARTWORK")
+    sep1:SetHeight(1)
+    sep1:SetPoint("TOPLEFT", frame, "TOPLEFT", 16, -78)
+    sep1:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -16, -78)
+    sep1:SetColorTexture(0.2, 0.4, 0.6, 0.5)
+
+    local scaleSlider = CreateFrame("Slider", "RWMF_ScaleSlider", frame, "OptionsSliderTemplate")
+    scaleSlider:SetPoint("TOPLEFT", frame, "TOPLEFT", 24, -104)
+    scaleSlider:SetWidth(310)
+    scaleSlider:SetMinMaxValues(MIN_SCALE, MAX_SCALE)
+    scaleSlider:SetValueStep(SCALE_STEP)
+    scaleSlider:SetObeyStepOnDrag(true)
+    _G[scaleSlider:GetName() .. "Low"]:SetText("50%")
+    _G[scaleSlider:GetName() .. "High"]:SetText("200%")
+    local scaleTitle = _G[scaleSlider:GetName() .. "Text"]
+    scaleTitle:SetText("Window Scale: 100%")
+    scaleSlider:SetScript("OnValueChanged", function(_, val)
+        val = math.floor((val / SCALE_STEP) + 0.5) * SCALE_STEP
+        val = math.floor(val * 100 + 0.5) / 100
+        if val ~= db.scale then
+            SetScale(val)
+        end
+        scaleTitle:SetText("Window Scale: " .. math.floor(val * 100 + 0.5) .. "%")
+    end)
+
+    local maxSlider = CreateFrame("Slider", "RWMF_MaxItemsSlider", frame, "OptionsSliderTemplate")
+    maxSlider:SetPoint("TOPLEFT", frame, "TOPLEFT", 24, -156)
+    maxSlider:SetWidth(310)
+    maxSlider:SetMinMaxValues(1, 10)
+    maxSlider:SetValueStep(1)
+    maxSlider:SetObeyStepOnDrag(true)
+    _G[maxSlider:GetName() .. "Low"]:SetText("1")
+    _G[maxSlider:GetName() .. "High"]:SetText("10")
+    local maxTitle = _G[maxSlider:GetName() .. "Text"]
+    maxTitle:SetText("Max Visible Items: 4")
+    maxSlider:SetScript("OnValueChanged", function(_, val)
+        val = math.floor(val + 0.5)
+        db.maxItems = val
+        maxTitle:SetText("Max Visible Items: " .. val)
+        EnsureGroupLootFrames(val)
+        ResizeMover()
+        CheckRollQueue()
+    end)
+
+    local maxHint = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    maxHint:SetPoint("TOPLEFT", maxSlider, "BOTTOMLEFT", 0, -4)
+    maxHint:SetText("Extra items wait in queue until active rolls finish.")
+
+    local combatCheck = CreateFrame("CheckButton", "RWMF_CombatCheck", frame, "UICheckButtonTemplate")
+    combatCheck:SetPoint("TOPLEFT", frame, "TOPLEFT", 20, -208)
+    local combatText = _G[combatCheck:GetName() .. "Text"]
+    combatText:SetText("Hide loot roll windows while in combat")
+    combatCheck:SetScript("OnClick", function(self)
+        db.hideInCombat = self:GetChecked() and true or false
+    end)
+
+    local minimapCheck = CreateFrame("CheckButton", "RWMF_MinimapCheck", frame, "UICheckButtonTemplate")
+    minimapCheck:SetPoint("TOPLEFT", frame, "TOPLEFT", 20, -238)
+    local minimapText = _G[minimapCheck:GetName() .. "Text"]
+    minimapText:SetText("Show Minimap button")
+    minimapCheck:SetScript("OnClick", function(self)
+        db.showMinimapButton = self:GetChecked() and true or false
+        UpdateMinimapButtonPosition()
+    end)
+
+    local sep2 = frame:CreateTexture(nil, "ARTWORK")
+    sep2:SetHeight(1)
+    sep2:SetPoint("TOPLEFT", frame, "TOPLEFT", 16, -274)
+    sep2:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -16, -274)
+    sep2:SetColorTexture(0.2, 0.4, 0.6, 0.5)
+
+    local testLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    testLabel:SetPoint("TOPLEFT", frame, "TOPLEFT", 20, -286)
+    testLabel:SetText("Preview Test Rolls:")
+
+    local t1Btn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    t1Btn:SetSize(70, 24)
+    t1Btn:SetPoint("TOPLEFT", frame, "TOPLEFT", 24, -310)
+    t1Btn:SetText("1 Item")
+    t1Btn:SetScript("OnClick", function()
+        StartTest(1)
+    end)
+
+    local t4Btn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    t4Btn:SetSize(70, 24)
+    t4Btn:SetPoint("LEFT", t1Btn, "RIGHT", 8, 0)
+    t4Btn:SetText("4 Items")
+    t4Btn:SetScript("OnClick", function()
+        StartTest(4)
+    end)
+
+    local t10Btn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    t10Btn:SetSize(74, 24)
+    t10Btn:SetPoint("LEFT", t4Btn, "RIGHT", 8, 0)
+    t10Btn:SetText("10 Items")
+    t10Btn:SetScript("OnClick", function()
+        StartTest(10)
+    end)
+
+    local tStopBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    tStopBtn:SetSize(74, 24)
+    tStopBtn:SetPoint("LEFT", t10Btn, "RIGHT", 8, 0)
+    tStopBtn:SetText("Stop Test")
+    tStopBtn:SetScript("OnClick", function()
+        StopTest()
+        Print("test roll window(s) hidden.")
+    end)
+
+    local authorInfo = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    authorInfo:SetPoint("BOTTOM", frame, "BOTTOM", 0, 14)
+    authorInfo:SetText("Roll Window Mover Forever v1.2.0 | Type /rollmove help")
+
+    function frame:Refresh()
+        lockBtn:SetText(mover:IsShown() and "Lock Anchor" or "Unlock Anchor")
+        scaleSlider:SetValue(db.scale or 1)
+        scaleTitle:SetText("Window Scale: " .. math.floor((db.scale or 1) * 100 + 0.5) .. "%")
+        maxSlider:SetValue(db.maxItems or 4)
+        maxTitle:SetText("Max Visible Items: " .. (db.maxItems or 4))
+        combatCheck:SetChecked(db.hideInCombat and true or false)
+        minimapCheck:SetChecked(db.showMinimapButton and true or false)
+    end
+
+    frame:Hide()
+    return frame
+end
+
 local function PrintHelp()
     Print("commands:")
-    print("  /rollmove - unlock or lock the loot roll window")
+    print("  /rollmove - unlock or lock the loot roll anchor")
+    print("  /rollmove config - open the settings window")
     print("  /rollmove scale <0.5-2> - set the window scale")
-    print("  /rollmove test [1-5] - show 1 to 5 test roll windows")
-    print("  /rollmove reset - restore the default position and scale")
+    print("  /rollmove max <1-10> - set max visible simultaneous rolls")
+    print("  /rollmove combat - toggle hide in combat")
+    print("  /rollmove minimap - toggle minimap button")
+    print("  /rollmove test [1-10] - preview test roll windows")
+    print("  /rollmove reset - restore default position and settings")
 end
 
 SLASH_ROLLWINDOWMOVERFOREVER1 = "/rollmove"
@@ -688,8 +1118,8 @@ SlashCmdList.ROLLWINDOWMOVERFOREVER = function(input)
     local numFromCmd = command:match("^test(%d+)$")
     if numFromCmd then
         testCount = tonumber(numFromCmd)
-    elseif command == "test1-5" or command == "test1-4" or (command == "test" and (value == "1-5" or value == "1-4" or value == "all")) then
-        testCount = 4
+    elseif command == "test1-10" or command == "test1-5" or command == "test1-4" or (command == "test" and (value == "1-10" or value == "1-5" or value == "1-4" or value == "all")) then
+        testCount = 10
     elseif command == "test" then
         if value and value ~= "" then
             local num = tonumber(value)
@@ -697,7 +1127,7 @@ SlashCmdList.ROLLWINDOWMOVERFOREVER = function(input)
                 testCount = num
             end
         else
-            testCount = testActive and 0 or 1
+            testCount = testActive and 0 or (db.maxItems or 4)
         end
     elseif command == "stop" then
         testCount = 0
@@ -719,12 +1149,37 @@ SlashCmdList.ROLLWINDOWMOVERFOREVER = function(input)
         else
             Unlock()
         end
+    elseif command == "config" or command == "settings" or command == "menu" or command == "options" then
+        ToggleSettings()
     elseif command == "unlock" then
         Unlock()
     elseif command == "lock" then
         Lock()
     elseif command == "reset" then
         Reset()
+    elseif command == "combat" then
+        db.hideInCombat = not db.hideInCombat
+        Print("hide in combat: " .. (db.hideInCombat and "|cff33ff99enabled|r" or "|cffff3333disabled|r"))
+        if settingsFrame and settingsFrame.Refresh then
+            settingsFrame:Refresh()
+        end
+    elseif command == "minimap" then
+        db.showMinimapButton = not db.showMinimapButton
+        UpdateMinimapButtonPosition()
+        Print("minimap button: " .. (db.showMinimapButton and "|cff33ff99enabled|r" or "|cffff3333disabled|r"))
+        if settingsFrame and settingsFrame.Refresh then
+            settingsFrame:Refresh()
+        end
+    elseif command == "max" and tonumber(value) then
+        local maxVal = math.floor(math.min(10, math.max(1, tonumber(value))))
+        db.maxItems = maxVal
+        EnsureGroupLootFrames(maxVal)
+        ResizeMover()
+        CheckRollQueue()
+        Print("max visible items set to " .. maxVal .. ".")
+        if settingsFrame and settingsFrame.Refresh then
+            settingsFrame:Refresh()
+        end
     elseif command == "scale" and tonumber(value) then
         Print("scale set to " .. SetScale(tonumber(value)) .. ".")
     else
@@ -736,9 +1191,11 @@ events = CreateFrame("Frame")
 events:RegisterEvent("ADDON_LOADED")
 events:RegisterEvent("PLAYER_ENTERING_WORLD")
 events:RegisterEvent("START_LOOT_ROLL")
-events:SetScript("OnEvent", function(self, event, name)
+events:RegisterEvent("PLAYER_REGEN_DISABLED")
+events:RegisterEvent("PLAYER_REGEN_ENABLED")
+events:SetScript("OnEvent", function(self, event, arg1, arg2)
     if event == "ADDON_LOADED" then
-        if name ~= ADDON_NAME then
+        if arg1 ~= ADDON_NAME then
             return
         end
         self:UnregisterEvent("ADDON_LOADED")
@@ -747,9 +1204,83 @@ events:SetScript("OnEvent", function(self, event, name)
         if type(db.scale) ~= "number" then
             db.scale = 1
         end
+        if type(db.maxItems) ~= "number" then
+            db.maxItems = 4
+        end
+        if type(db.hideInCombat) ~= "boolean" then
+            db.hideInCombat = true
+        end
+        if type(db.showMinimapButton) ~= "boolean" then
+            db.showMinimapButton = true
+        end
+        if type(db.minimapPos) ~= "number" then
+            db.minimapPos = 220
+        end
+
+        EnsureGroupLootFrames(10)
         mover = CreateMover()
         ResizeMover()
         PlaceMover()
+        minimapBtn = CreateMinimapButton()
+        UpdateMinimapButtonPosition()
+        settingsFrame = CreateSettingsUI()
+
+        if type(GroupLootFrame_OpenNewFrame) == "function" and not origOpenNewFrame then
+            origOpenNewFrame = GroupLootFrame_OpenNewFrame
+            GroupLootFrame_OpenNewFrame = function(rollID, rollTime)
+                if not IsTestRoll(rollID) and db then
+                    local maxAllowed = db.maxItems or 4
+                    if #ActiveRollFrames() >= maxAllowed then
+                        table.insert(rollQueue, { rollID = rollID, rollTime = rollTime, isReal = true })
+                        return
+                    end
+                end
+                return origOpenNewFrame(rollID, rollTime)
+            end
+        end
+
+        for i = 1, 10 do
+            local f = _G["GroupLootFrame" .. i]
+            if f and type(f.HookScript) == "function" and not hooked["realhide" .. i] then
+                hooked["realhide" .. i] = true
+                f:HookScript("OnHide", function()
+                    if not testActive and not stoppingTest then
+                        CheckRollQueue()
+                    end
+                end)
+            end
+        end
+    elseif event == "PLAYER_REGEN_DISABLED" then
+        if db and db.hideInCombat then
+            combatHidden = true
+            for _, frame in ipairs(AllGroupLootFrames()) do
+                frame:SetAlpha(0)
+                frame:EnableMouse(false)
+            end
+            if _G.GroupLootContainer then
+                _G.GroupLootContainer:SetAlpha(0)
+            end
+        end
+    elseif event == "PLAYER_REGEN_ENABLED" then
+        if combatHidden then
+            combatHidden = false
+            for _, frame in ipairs(AllGroupLootFrames()) do
+                frame:SetAlpha(1)
+                frame:EnableMouse(true)
+            end
+            if _G.GroupLootContainer then
+                _G.GroupLootContainer:SetAlpha(1)
+            end
+        end
+    elseif event == "START_LOOT_ROLL" then
+        local rollID = arg1
+        local rollTime = arg2
+        if rollID and not IsTestRoll(rollID) then
+            local maxAllowed = (db and db.maxItems) or 4
+            if #ActiveRollFrames() >= maxAllowed then
+                table.insert(rollQueue, { rollID = rollID, rollTime = rollTime })
+            end
+        end
     end
     if db then
         ApplyAll()

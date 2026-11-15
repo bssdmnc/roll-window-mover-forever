@@ -11,10 +11,21 @@ Move and resize the **Need / Greed / Pass** loot roll window. Made for **WoW For
 
 ## Commands
 
-- **/rollmove**: show or hide the drag box
-- **/rollmove test [1-5]**: preview 1 to 5 test roll windows (type again to hide)
+- **/rollmove**: show or hide the drag anchor
+- **/rollmove config**: open the settings window
+- **/rollmove test [1-10]**: preview test roll windows (type again to hide)
 - **/rollmove scale 0.5-2**: set the scale
-- **/rollmove reset**: back to the default Blizzard position
+- **/rollmove max 1-10**: set max simultaneous items (extra items wait in queue)
+- **/rollmove combat**: toggle hide roll windows while in combat
+- **/rollmove minimap**: toggle minimap button
+- **/rollmove reset**: back to default Blizzard position and settings
+
+## Minimap Button
+
+- **Left-click**: unlock or lock the anchor
+- **Right-click**: open settings window
+- **Shift + Left-click**: toggle test roll windows
+- **Drag**: position anywhere around the minimap
 
 ## Details
 

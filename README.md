@@ -7,10 +7,14 @@ Made for WoW Forever (`_classic_beta_`, Interface 16001), also flagged for Class
 
 | Command | What it does |
 | --- | --- |
-| `/rollmove` | Show or hide the blue drag box |
+| `/rollmove` | Show or hide the loot roll anchor |
+| `/rollmove config` | Open the graphical settings window |
 | `/rollmove scale 0.5-2` | Set the roll window scale |
-| `/rollmove test [1-5]` | Show 1 to 5 test loot roll windows (or hide them) |
-| `/rollmove reset` | Restore the default Blizzard position and scale |
+| `/rollmove max 1-10` | Set max simultaneous visible items (extra queue up) |
+| `/rollmove combat` | Toggle hide roll windows while in combat |
+| `/rollmove minimap` | Toggle minimap button |
+| `/rollmove test [1-10]` | Show test loot roll windows (or hide them) |
+| `/rollmove reset` | Restore default position and settings |
 
 While the box is shown: drag it with the left mouse button, scroll to resize, right-click to lock.
 The position is saved account-wide and reapplied every time a new roll appears.
