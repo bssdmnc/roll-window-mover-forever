@@ -414,7 +414,7 @@ local function Reset()
     db.point, db.relativePoint, db.x, db.y = nil, nil, nil, nil
     db.scale = 1
     db.maxItems = 4
-    db.hideInCombat = true
+    db.hideInCombat = false
     db.showMinimapButton = true
     mover:Hide()
     StopTest()
@@ -1080,7 +1080,7 @@ local function CreateSettingsUI()
 
     local authorInfo = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     authorInfo:SetPoint("BOTTOM", frame, "BOTTOM", 0, 14)
-    authorInfo:SetText("Roll Window Mover Forever v1.2.0 | Type /rollmove help")
+    authorInfo:SetText("Roll Window Mover Forever v1.2.1 | Type /rollmove help")
 
     function frame:Refresh()
         lockBtn:SetText(mover:IsShown() and "Lock Anchor" or "Unlock Anchor")
@@ -1208,7 +1208,7 @@ events:SetScript("OnEvent", function(self, event, arg1, arg2)
             db.maxItems = 4
         end
         if type(db.hideInCombat) ~= "boolean" then
-            db.hideInCombat = true
+            db.hideInCombat = false
         end
         if type(db.showMinimapButton) ~= "boolean" then
             db.showMinimapButton = true
