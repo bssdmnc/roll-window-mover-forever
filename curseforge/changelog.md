@@ -1,3 +1,8 @@
+## 1.3.1
+
+- Fixed `CHAT_MSG_LOOT` filter registration on `16001` clients using `ChatFrameUtil.AddMessageEventFilter` (real group loot rolls were bypassing the chat grouping filter).
+- Fixed loot line parsing for `|cnIQ...:` item links, `|HlootHistory:...|h` tags, and `lineID == 0` deduplication.
+
 ## 1.3.0
 
 - **Chat Roll Anti-Spam**: Group intermediate Need / Greed / Disenchant / Transmog / Pass chat lines into one compact expandable line (`[+ Rolls (N)]`). Clicking it expands/collapses all player rolls inline; works with both Blizzard Chat and **Chattynator**.

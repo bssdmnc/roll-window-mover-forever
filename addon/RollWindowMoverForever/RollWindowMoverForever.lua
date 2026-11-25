@@ -56,8 +56,8 @@ local L = {
         or "unlocked. Drag any box, scroll to resize, right-click or /rollmove lock to save.",
     LOCKED_MSG = isRu and "закреплено. Позиция сохранена." or "locked. Position saved.",
     RESET_MSG = isRu and "позиция и настройки сброшены по умолчанию." or "reset to the default Blizzard position and settings.",
-    VERSION_FOOTER = isRu and "Roll Window Mover Forever v1.3.0 | /rollmove help"
-        or "Roll Window Mover Forever v1.3.0 | Type /rollmove help",
+    VERSION_FOOTER = isRu and "Roll Window Mover Forever v1.3.1 | /rollmove help"
+        or "Roll Window Mover Forever v1.3.1 | Type /rollmove help",
 }
 
 local TITLE = L.TITLE
@@ -1791,7 +1791,10 @@ local function StripLootHistoryTag(fmt)
     if type(fmt) ~= "string" then
         return nil
     end
-    local s, e = fmt:find("|HlootHistory:.-|h.-|h:?%s*")
+    local s, e = fmt:find("|c%x%x%x%x%x%x%x%x|HlootHistory:.-|h.-|h|r:?%s*")
+    if not s then
+        s, e = fmt:find("|HlootHistory:.-|h.-|h|?r?:?%s*")
+    end
     if not s then
         return fmt
     end
@@ -1938,7 +1941,8 @@ local function ProtectLinks(text)
         saved[#saved + 1] = link
         return "\001L" .. #saved .. "\001"
     end
-    local masked = text:gsub("(|c%x%x%x%x%x%x%x%x|H.-|h%[.-%]|h|r)", stash)
+    local masked = text:gsub("(|cn[^:]+:|H.-|h%[.-%]|h|r)", stash)
+    masked = masked:gsub("(|c%x%x%x%x%x%x%x%x|H.-|h%[.-%]|h|r)", stash)
     masked = masked:gsub("(|H.-|h%[.-%]|h)", stash)
     return masked, saved
 end
@@ -1952,39 +1956,47 @@ local function RestoreLinks(val, saved)
     end))
 end
 
+local function CleanPlayerName(rawName)
+    if type(rawName) ~= "string" then
+        return nil
+    end
+    local cleaned = rawName
+        :gsub("|Hplayer:[^|]*|h%[?([^%]|]*)%]?|h", "%1")
+        :gsub("|c%x%x%x%x%x%x%x%x", "")
+        :gsub("|cn[^:]+:", "")
+        :gsub("|r", "")
+    return strtrim and strtrim(cleaned) or cleaned
+end
+
 local function MatchLootRollLine(rawText)
     if type(rawText) ~= "string" or rawText == "" then
         return nil
     end
-    local lootHistoryID
+    local lhStr = rawText:match("|HlootHistory:(%d+)|h")
+    local lootHistoryID = lhStr and tonumber(lhStr) or nil
     local cleanText = rawText
-    local lhStr, _, tagEnd = rawText:match("^|HlootHistory:(%d+)|h.-|h:?%s*()")
-    if lhStr and tagEnd then
-        lootHistoryID = tonumber(lhStr)
-        cleanText = rawText:sub(tagEnd)
-    else
-        local s, e = rawText:find("^|HlootHistory:.-|h.-|h:?%s*")
-        if s and e then
-            cleanText = rawText:sub(e + 1)
-        end
-    end
+        :gsub("|c%x%x%x%x%x%x%x%x|HlootHistory:[^|]*|h.-|h|r:?%s*", "")
+        :gsub("|cn[^:]+:|HlootHistory:[^|]*|h.-|h|r:?%s*", "")
+        :gsub("|HlootHistory:[^|]*|h.-|h|?r?:?%s*", "")
     local masked, savedLinks = ProtectLinks(cleanText)
     for _, pat in ipairs(GetRollPatterns()) do
         local caps = { masked:match(pat.regex) }
         if #caps > 0 then
-            local itemLink, rollNumber, playerName
+            local itemLink, rollNumber, rollArgIdx, playerName
             for i, cap in ipairs(caps) do
                 local restored = RestoreLinks(cap, savedLinks)
+                local idx = pat.map[i]
                 if pat.types[i] == "d" then
-                    if not rollNumber and tonumber(restored) then
-                        rollNumber = tonumber(restored)
+                    local num = tonumber(restored)
+                    if num and (not rollArgIdx or (idx and idx < rollArgIdx)) then
+                        rollNumber = num
+                        rollArgIdx = idx
                     end
                 elseif restored:find("|Hitem:", 1, true) or restored:find("|h%[") then
                     itemLink = itemLink or restored
                 else
-                    local idx = pat.map[i]
                     if idx and not playerName and restored ~= "" then
-                        playerName = restored
+                        playerName = CleanPlayerName(restored)
                     end
                 end
             end
@@ -2108,8 +2120,11 @@ local function ToggleEntryInChat(entryId)
     end
 end
 
+local fallbackTick = -1
+local fallbackDecisions = {}
+
 local function CacheChatDecision(lineID, result)
-    if not lineID then
+    if type(lineID) ~= "number" or lineID <= 0 then
         return
     end
     chatLineCache[lineID] = result
@@ -2121,7 +2136,7 @@ local function CacheChatDecision(lineID, result)
 end
 
 local function ProcessLootChatLine(rawText, lineID)
-    if lineID and chatLineCache[lineID] then
+    if type(lineID) == "number" and lineID > 0 and chatLineCache[lineID] then
         return chatLineCache[lineID]
     end
     local pat, lootHistoryID, itemLink, playerName, rollNumber = MatchLootRollLine(rawText)
@@ -2180,15 +2195,43 @@ local function ProcessLootChatLine(rawText, lineID)
     return res
 end
 
-local function LootChatFilter(_, _, msg, ...)
+local function ProcessChatMessageDeduplicated(chatFrame, rawText, lineID)
+    if type(lineID) == "number" and lineID > 0 then
+        return ProcessLootChatLine(rawText, lineID)
+    end
+    local now = GetTime and GetTime() or 0
+    if now ~= fallbackTick then
+        fallbackTick = now
+        fallbackDecisions = {}
+    end
+    local frameKey = chatFrame or "default"
+    for _, cached in ipairs(fallbackDecisions) do
+        if cached.text == rawText and not cached.frames[frameKey] then
+            cached.frames[frameKey] = true
+            return cached.res
+        end
+    end
+    local res = ProcessLootChatLine(rawText, nil)
+    fallbackDecisions[#fallbackDecisions + 1] = {
+        text = rawText,
+        res = res,
+        frames = { [frameKey] = true },
+    }
+    return res
+end
+
+local function LootChatFilter(chatFrame, _, msg, ...)
     if not db or (not db.groupRollChat and not db.chatRollButton) then
         return false
     end
-    if issecretvalue and issecretvalue(msg) then
+    if (issecretvalue and issecretvalue(msg)) or (canaccessvalue and not canaccessvalue(msg)) or type(msg) ~= "string" then
         return false
     end
-    local lineID = select(10, ...)
-    local res = ProcessLootChatLine(msg, lineID)
+    local lineID = Plain(select(10, ...))
+    local ok, res = pcall(ProcessChatMessageDeduplicated, chatFrame, msg, lineID)
+    if not ok or not res then
+        return false
+    end
     if res.action == "intermediate" then
         if db.groupRollChat then
             return true
@@ -2259,9 +2302,15 @@ local function HandleCustomHyperlink(link)
 end
 
 InstallChatIntegrations = function()
-    if not chatFilterInstalled and ChatFrame_AddMessageEventFilter then
-        chatFilterInstalled = true
-        ChatFrame_AddMessageEventFilter("CHAT_MSG_LOOT", LootChatFilter)
+    if not chatFilterInstalled then
+        local addFilter = (ChatFrameUtil and ChatFrameUtil.AddMessageEventFilter) or ChatFrame_AddMessageEventFilter
+        if type(addFilter) == "function" then
+            local ok = pcall(addFilter, "CHAT_MSG_LOOT", LootChatFilter)
+            if not ok and ChatFrame_AddMessageEventFilter and addFilter ~= ChatFrame_AddMessageEventFilter then
+                ok = pcall(ChatFrame_AddMessageEventFilter, "CHAT_MSG_LOOT", LootChatFilter)
+            end
+            chatFilterInstalled = ok and true or false
+        end
     end
     if not chattynatorModifierInstalled and Chattynator and Chattynator.API and Chattynator.API.AddModifier then
         chattynatorModifierInstalled = true
