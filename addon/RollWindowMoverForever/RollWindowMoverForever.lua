@@ -1,9 +1,70 @@
 local ADDON_NAME = ...
 
-local TITLE = "|cff33ff99Roll Window Mover|r"
+local isRu = (GetLocale and GetLocale() == "ruRU")
+
+local L = {
+    TITLE = "|cff33ff99Roll Window Mover|r",
+    SETTINGS_TITLE = isRu and "|cff33ff99Roll Window Mover|r — Настройки" or "|cff33ff99Roll Window Mover|r Settings",
+    ANCHOR_HINT = isRu and "Предмет 1 (базовый якорь)\nТащите для переноса, колесо — масштаб\nПКМ — закрепить"
+        or "Item 1 (Base Anchor)\nDrag to move, scroll to resize\nRight-click to lock",
+    ITEM_N = isRu and "Предмет %d" or "Item %d",
+    ITEM_GROWS_UP = isRu and "Предмет %d  ▲ Растёт вверх ▲" or "Item %d  ▲ Grows upwards ▲",
+    LOCK_ANCHOR = isRu and "Закрепить якорь" or "Lock Anchor",
+    UNLOCK_ANCHOR = isRu and "Разблокировать" or "Unlock Anchor",
+    RESET_DEFAULTS = isRu and "Сбросить всё" or "Reset Defaults",
+    WINDOW_SCALE = isRu and "Масштаб окон: %d%%" or "Window Scale: %d%%",
+    MAX_ITEMS = isRu and "Макс. видимых роллов: %d" or "Max Visible Items: %d",
+    MAX_HINT = isRu and "Лишние предметы ждут в очереди, пока освободится место."
+        or "Extra items wait in queue until active rolls finish.",
+    HIDE_COMBAT = isRu and "Скрывать окна ролла в бою" or "Hide loot roll windows while in combat",
+    SHOW_MINIMAP = isRu and "Показывать кнопку у миникарты" or "Show Minimap button",
+    GROUP_CHAT = isRu and "Группировать спам роллов в одно сообщение" or "Group roll spam into one expandable chat line",
+    CHAT_BUTTON = isRu and "Кнопка [Роллы] в чате для открытия сводки" or "Add clickable [Rolls] button on loot roll messages",
+    PREVIEW_ROLLS = isRu and "Тест окон ролла:" or "Preview Test Rolls:",
+    ITEM_1 = isRu and "1 предмет" or "1 Item",
+    ITEM_4 = isRu and "4 предмета" or "4 Items",
+    ITEM_10 = isRu and "10 предметов" or "10 Items",
+    STOP_TEST = isRu and "Стоп тест" or "Stop Test",
+    OPEN_HISTORY = isRu and "Сводка роллов" or "Roll History",
+    HISTORY_TITLE = isRu and "|cff33ff99Сводка роллов|r (кто сколько выбросил)" or "|cff33ff99Roll History|r (Roll Ledger)",
+    CLEAR_HISTORY = isRu and "Очистить" or "Clear",
+    NO_HISTORY = isRu and "Пока нет записанных роллов.\nЗапустите /rollmove test или соберите добычу в группе."
+        or "No loot rolls recorded yet.\nRun /rollmove test or roll on loot in a group.",
+    SELECT_ROLL = isRu and "Выберите предмет слева" or "Select an item on the left",
+    WON_BY = isRu and "Победил: %s" or "Won by: %s",
+    YOU_WON = isRu and "Вы выиграли" or "You won",
+    ALL_PASSED = isRu and "Все отказались" or "All passed",
+    IN_PROGRESS = isRu and "Идёт розыгрыш..." or "Roll in progress...",
+    NO_PARTICIPANTS = isRu and "Подробные ставки не зафиксированы (включите подробный лут или C_LootHistory)."
+        or "No individual roll details recorded.",
+    ROLLS_BTN = isRu and "Роллы" or "Rolls",
+    DETAILS_BTN = isRu and "Подробнее" or "Details",
+    CHOICE_NEED = isRu and "Нужно" or "Need",
+    CHOICE_GREED = isRu and "Не откажусь" or "Greed",
+    CHOICE_DE = isRu and "Распылить" or "Disenchant",
+    CHOICE_TRANSMOG = isRu and "Трансмог" or "Transmog",
+    CHOICE_PASS = isRu and "Пас" or "Pass",
+    CHOICE_UNKNOWN = isRu and "Ролл" or "Roll",
+    MINIMAP_LCLICK = isRu and "ЛКМ: Разблокировать / Закрепить якорь" or "Left-click: Unlock / Lock anchor",
+    MINIMAP_RCLICK = isRu and "ПКМ: Открыть настройки" or "Right-click: Open Settings",
+    MINIMAP_SHIFT_L = isRu and "Shift + ЛКМ: Тестовые роллы" or "Shift + Left-click: Toggle test rolls",
+    MINIMAP_SHIFT_R = isRu and "Shift + ПКМ: Сводка роллов" or "Shift + Right-click: Roll History",
+    MINIMAP_DRAG = isRu and "Перетаскивание: Вокруг миникарты" or "Drag: Move around Minimap",
+    TOOLTIP_CLICK_TOGGLE = isRu and "ЛКМ: свернуть/развернуть в чате" or "Left-click: expand/collapse in chat",
+    TOOLTIP_CLICK_OPEN = isRu and "ЛКМ: открыть подробную сводку" or "Left-click: open roll details window",
+    UNLOCKED_MSG = isRu and "разблокировано. Перетащите, прокрутите колесо для масштаба, ПКМ или /rollmove lock для сохранения."
+        or "unlocked. Drag any box, scroll to resize, right-click or /rollmove lock to save.",
+    LOCKED_MSG = isRu and "закреплено. Позиция сохранена." or "locked. Position saved.",
+    RESET_MSG = isRu and "позиция и настройки сброшены по умолчанию." or "reset to the default Blizzard position and settings.",
+    VERSION_FOOTER = isRu and "Roll Window Mover Forever v1.3.0 | /rollmove help"
+        or "Roll Window Mover Forever v1.3.0 | Type /rollmove help",
+}
+
+local TITLE = L.TITLE
 local MOVER_WIDTH, MOVER_HEIGHT = 280, 72
 local MIN_SCALE, MAX_SCALE, SCALE_STEP = 0.5, 2, 0.05
 local DEFAULT_X, DEFAULT_Y = 0, 200
+local MAX_HISTORY = 60
 local TEST_ROLL_TIME = 60000
 local TEST_ITEMS = {
     {
@@ -87,6 +148,8 @@ local db
 local mover
 local minimapBtn
 local settingsFrame
+local historyFrame
+local selectedHistoryId
 local combatHidden = false
 local stoppingTest = false
 local rollQueue = {}
@@ -101,9 +164,27 @@ local realGetLootRollItemLink
 local realRollOnLoot
 local dismissing = {}
 local events
+local historyById = {}
+local activeRollEntries = {}
+local lootHistoryEntries = {}
+local runtimeChatIds = {}
+local chatLineCache = {}
+local chatLineOrder = {}
+local rollPatterns
+local chatFilterInstalled = false
+local chattynatorModifierInstalled = false
+local hyperlinkHookInstalled = false
+local rollOnLootHooked = false
 
 local function Print(message)
     print(TITLE .. ": " .. message)
+end
+
+local function Plain(value)
+    if issecretvalue and issecretvalue(value) then
+        return nil
+    end
+    return value
 end
 
 local function Pack(...)
@@ -125,6 +206,8 @@ local function IsTestRoll(rollID)
 end
 
 local HookFrameLifecycle
+local OpenRollDetails
+local RefreshHistoryUI
 
 local function AddSlotBorder(slotFrame, r, g, b, a)
     local top = slotFrame:CreateTexture(nil, "BORDER")
@@ -469,15 +552,34 @@ local function ApplyFrameScale(frame, scale)
     end
 end
 
+local function ApplyCombatVisibility(frame)
+    if not frame then
+        return
+    end
+    if combatHidden then
+        frame:SetAlpha(0)
+        if frame.EnableMouse then
+            frame:EnableMouse(false)
+        end
+    else
+        frame:SetAlpha(1)
+        if frame.EnableMouse then
+            frame:EnableMouse(true)
+        end
+    end
+end
+
 local function ApplyAll()
     local scale = (db and db.scale) or 1
     for _, frame in ipairs(Targets()) do
         Hook(frame)
         frame:SetScale(scale)
         Anchor(frame)
+        ApplyCombatVisibility(frame)
     end
     for _, frame in ipairs(AllGroupLootFrames()) do
         ApplyFrameScale(frame, scale)
+        ApplyCombatVisibility(frame)
     end
 end
 
@@ -497,9 +599,9 @@ local function ResizeMover()
                 slot:SetPoint("BOTTOM", prev, "TOP", 0, spacing)
                 if slot.text then
                     if i == maxVisible then
-                        slot.text:SetText("Item " .. i .. "  ▲ Grows upwards ▲")
+                        slot.text:SetText(string.format(L.ITEM_GROWS_UP, i))
                     else
-                        slot.text:SetText("Item " .. i)
+                        slot.text:SetText(string.format(L.ITEM_N, i))
                     end
                 end
                 if i <= maxVisible then
@@ -554,7 +656,7 @@ local function Unlock()
     end
     mover:Show()
     ResizeMover()
-    Print("unlocked. Drag any box, scroll to resize, right-click or /rollmove lock to save.")
+    Print(L.UNLOCKED_MSG)
     if settingsFrame and settingsFrame.Refresh then
         settingsFrame:Refresh()
     end
@@ -566,7 +668,7 @@ local function Lock()
     end
     mover:Hide()
     SavePosition()
-    Print("locked. Position saved.")
+    Print(L.LOCKED_MSG)
     if settingsFrame and settingsFrame.Refresh then
         settingsFrame:Refresh()
     end
@@ -681,6 +783,8 @@ local function Reset()
     db.maxItems = 4
     db.hideInCombat = false
     db.showMinimapButton = true
+    db.groupRollChat = true
+    db.chatRollButton = true
     mover:Hide()
     StopTest()
     PlaceMover()
@@ -704,7 +808,7 @@ local function Reset()
     if settingsFrame and settingsFrame.Refresh then
         settingsFrame:Refresh()
     end
-    Print("reset to the default Blizzard position and settings.")
+    Print(L.RESET_MSG)
 end
 
 local function GetButtonRollType(btn)
@@ -759,6 +863,9 @@ local function HookTestButtons(frame)
         if btn and type(btn.HookScript) == "function" and not hooked[btn] then
             hooked[btn] = true
             btn:HookScript("OnClick", function(self)
+                if not testActive then
+                    return
+                end
                 local current = self
                 while current do
                     local rollID = current.rollID
@@ -769,8 +876,6 @@ local function HookTestButtons(frame)
                     end
                     current = current:GetParent()
                 end
-                frame:Hide()
-                frame.rollID = nil
             end)
         end
     end
@@ -904,6 +1009,12 @@ CheckRollQueue = function()
     end
 end
 
+local RecordTestRollResult
+local RecordStartLootRoll
+local SyncAllLootHistory
+local InstallChatIntegrations
+local ToggleHistoryWindow
+
 HookFrameLifecycle = function(frame)
     if not frame or type(frame.HookScript) ~= "function" or hooked["lifecycle" .. tostring(frame)] then
         return
@@ -913,6 +1024,7 @@ HookFrameLifecycle = function(frame)
         if db then
             ApplyFrameScale(self, db.scale or 1)
         end
+        ApplyCombatVisibility(self)
     end)
     frame:HookScript("OnHide", function(self)
         if not testActive and not stoppingTest then
@@ -933,18 +1045,9 @@ function DismissTestRoll(rollID, rollType)
     dismissing[num] = true
 
     local testItem = testItemsByRollID[num]
-    local itemName = (testItem and testItem.resolvedName) or "item"
     rollType = rollType or 0
-    if rollType == 1 then
-        Print(itemName .. ": Need")
-    elseif rollType == 2 then
-        Print(itemName .. ": Greed")
-    elseif rollType == 3 then
-        Print(itemName .. ": Disenchant")
-    elseif rollType == 4 then
-        Print(itemName .. ": Transmog")
-    else
-        Print(itemName .. ": Pass")
+    if RecordTestRollResult then
+        RecordTestRollResult(testItem, rollType)
     end
 
     if StaticPopup_Hide then
@@ -1090,7 +1193,7 @@ local function CreateMover()
 
     local label = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     label:SetPoint("CENTER")
-    label:SetText("Item 1 (Base Anchor)\nDrag to move, scroll to resize\nRight-click to lock")
+    label:SetText(L.ANCHOR_HINT)
 
     frame:SetScript("OnDragStart", frame.StartMoving)
     frame:SetScript("OnDragStop", function(self)
@@ -1125,7 +1228,7 @@ local function CreateMover()
 
         local txt = slot:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         txt:SetPoint("CENTER")
-        txt:SetText("Item " .. i)
+        txt:SetText(string.format(L.ITEM_N, i))
         slot.text = txt
 
         slot:SetScript("OnDragStart", function()
@@ -1151,6 +1254,1534 @@ local function CreateMover()
 
     frame:Hide()
     return frame
+end
+
+local function PlayerSelfName()
+    local ok, name = pcall(UnitName, "player")
+    name = ok and Plain(name)
+    if type(name) == "string" and name ~= "" then
+        return name
+    end
+    return _G.YOU or "You"
+end
+
+local function ShortName(name)
+    if type(name) ~= "string" then
+        return ""
+    end
+    return (name:gsub("%-.*$", ""))
+end
+
+local function IsSelfPlayer(name)
+    if type(name) ~= "string" or name == "" then
+        return false
+    end
+    local you = (_G.YOU or "You"):lower()
+    local low = name:lower()
+    if low == you then
+        return true
+    end
+    local me = PlayerSelfName():lower()
+    return low == me or ShortName(low) == ShortName(me)
+end
+
+local function LookupPlayerClass(name)
+    if type(name) ~= "string" or name == "" then
+        return nil
+    end
+    if IsSelfPlayer(name) then
+        local ok, _, cls = pcall(UnitClass, "player")
+        return ok and Plain(cls) or nil
+    end
+    local shortTarget = ShortName(name):lower()
+    local numRaid = GetNumGroupMembers and GetNumGroupMembers() or 0
+    if IsInRaid and IsInRaid() and numRaid > 0 then
+        for i = 1, numRaid do
+            local unit = "raid" .. i
+            local okN, unitName = pcall(UnitName, unit)
+            unitName = okN and Plain(unitName)
+            if type(unitName) == "string" and (unitName:lower() == name:lower() or ShortName(unitName):lower() == shortTarget) then
+                local okC, _, cls = pcall(UnitClass, unit)
+                return okC and Plain(cls) or nil
+            end
+        end
+    elseif numRaid > 0 then
+        for i = 1, 4 do
+            local unit = "party" .. i
+            local okN, unitName = pcall(UnitName, unit)
+            unitName = okN and Plain(unitName)
+            if type(unitName) == "string" and (unitName:lower() == name:lower() or ShortName(unitName):lower() == shortTarget) then
+                local okC, _, cls = pcall(UnitClass, unit)
+                return okC and Plain(cls) or nil
+            end
+        end
+    end
+    return nil
+end
+
+local function ClassColorHex(classToken)
+    if not classToken then
+        return nil
+    end
+    if C_ClassColor and C_ClassColor.GetClassColor then
+        local color = C_ClassColor.GetClassColor(classToken)
+        if color and color.GenerateHexColor then
+            return color:GenerateHexColor()
+        end
+    end
+    local c = RAID_CLASS_COLORS and RAID_CLASS_COLORS[classToken]
+    if c then
+        if c.colorStr then
+            return c.colorStr
+        end
+        return string.format("ff%02x%02x%02x", math.floor((c.r or 1) * 255 + 0.5), math.floor((c.g or 1) * 255 + 0.5), math.floor((c.b or 1) * 255 + 0.5))
+    end
+    return nil
+end
+
+local function ColorizeName(name, classToken)
+    local hex = ClassColorHex(classToken or LookupPlayerClass(name))
+    if hex then
+        return "|c" .. hex .. name .. "|r"
+    end
+    return "|cffffffff" .. name .. "|r"
+end
+
+local function ItemQualityColor(quality)
+    if GetItemQualityColor and quality then
+        local r, g, b, hex = GetItemQualityColor(quality)
+        if r then
+            return r, g, b, hex
+        end
+    end
+    if ITEM_QUALITY_COLORS and quality and ITEM_QUALITY_COLORS[quality] then
+        local c = ITEM_QUALITY_COLORS[quality]
+        return c.r or 1, c.g or 1, c.b or 1, c.hex
+    end
+    return 1, 1, 1, "|cffffffff"
+end
+
+local CHOICE_PRIORITY = {
+    need = 1,
+    greed = 2,
+    de = 3,
+    transmog = 4,
+    pass = 5,
+}
+
+local CHOICE_COLORS = {
+    need = "ff33ff66",
+    greed = "ffffcc00",
+    de = "ffcc66ff",
+    transmog = "ffff66cc",
+    pass = "ff888888",
+}
+
+local function ChoiceLabel(choice)
+    if choice == "need" then
+        return L.CHOICE_NEED
+    elseif choice == "greed" then
+        return L.CHOICE_GREED
+    elseif choice == "de" then
+        return L.CHOICE_DE
+    elseif choice == "transmog" then
+        return L.CHOICE_TRANSMOG
+    elseif choice == "pass" then
+        return L.CHOICE_PASS
+    end
+    return L.CHOICE_UNKNOWN
+end
+
+local function ChoiceColoredText(choice)
+    local hex = CHOICE_COLORS[choice] or "ffcccccc"
+    return "|c" .. hex .. ChoiceLabel(choice) .. "|r"
+end
+
+local function ExtractItemID(link)
+    if type(link) ~= "string" then
+        return nil
+    end
+    return tonumber(link:match("item:(%d+)"))
+end
+
+local function ExtractItemName(link)
+    if type(link) ~= "string" then
+        return nil
+    end
+    return link:match("%[(.-)%]")
+end
+
+local function GetEntryById(entryId)
+    local num = tonumber(entryId)
+    if not num then
+        return nil
+    end
+    if historyById[num] then
+        return historyById[num]
+    end
+    if db and type(db.history) == "table" then
+        for _, e in ipairs(db.history) do
+            if e.id == num then
+                historyById[num] = e
+                return e
+            end
+        end
+    end
+    return nil
+end
+
+local function TrimHistory()
+    if not db or type(db.history) ~= "table" then
+        return
+    end
+    while #db.history > MAX_HISTORY do
+        local removed = table.remove(db.history)
+        if removed and removed.id then
+            historyById[removed.id] = nil
+            runtimeChatIds[removed.id] = nil
+        end
+    end
+end
+
+local function AddEntryToHistory(entry)
+    if not db then
+        return
+    end
+    db.history = db.history or {}
+    if not entry.id then
+        db.nextHistoryId = (db.nextHistoryId or 1)
+        entry.id = db.nextHistoryId
+        db.nextHistoryId = entry.id + 1
+    end
+    if not historyById[entry.id] then
+        table.insert(db.history, 1, entry)
+        historyById[entry.id] = entry
+        TrimHistory()
+    end
+end
+
+local function CreateRollEntry(itemLink, rollID, lootHistoryID, icon, quality, itemName)
+    local itemID = ExtractItemID(itemLink)
+    local resolvedName = itemName or ExtractItemName(itemLink)
+    local resolvedQuality = quality
+    local resolvedIcon = icon
+    if itemLink or itemID then
+        local getItemInfo = (C_Item and C_Item.GetItemInfo) or GetItemInfo
+        if getItemInfo then
+            local ok, n, l, q, _, _, _, _, _, _, tex = pcall(getItemInfo, itemLink or itemID)
+            if ok and n then
+                resolvedName = resolvedName or n
+                itemLink = itemLink or l
+                resolvedQuality = resolvedQuality or q
+                resolvedIcon = resolvedIcon or tex
+            end
+        end
+    end
+    local entry = {
+        rollID = rollID,
+        lootHistoryID = lootHistoryID,
+        itemID = itemID,
+        itemLink = itemLink or (itemID and ("item:" .. itemID)) or resolvedName or "item",
+        itemName = resolvedName or "Item",
+        itemQuality = resolvedQuality or 1,
+        itemIcon = resolvedIcon or "Interface\\Icons\\INV_Misc_QuestionMark",
+        startedAt = time(),
+        finished = false,
+        allPassed = false,
+        expanded = false,
+        participants = {},
+        participantOrder = 0,
+    }
+    AddEntryToHistory(entry)
+    table.insert(activeRollEntries, entry)
+    if lootHistoryID then
+        lootHistoryEntries[lootHistoryID] = entry
+    end
+    return entry
+end
+
+local function PruneActiveEntries()
+    local now = time()
+    for i = #activeRollEntries, 1, -1 do
+        local e = activeRollEntries[i]
+        if e.finished and now - (e.finishedAt or e.startedAt or now) > 120 then
+            table.remove(activeRollEntries, i)
+        elseif not e.finished and now - (e.startedAt or now) > 600 then
+            table.remove(activeRollEntries, i)
+        end
+    end
+end
+
+local function EntryMatchesItem(entry, itemLink, itemID)
+    if itemID and entry.itemID and entry.itemID == itemID then
+        return true
+    end
+    if itemLink and entry.itemLink == itemLink then
+        return true
+    end
+    local name = ExtractItemName(itemLink)
+    if name and entry.itemName and name == entry.itemName then
+        return true
+    end
+    return false
+end
+
+local function FindOrCreateEntryForChat(itemLink, lootHistoryID, playerName, isRollNumber, isOutcome)
+    PruneActiveEntries()
+    if lootHistoryID and lootHistoryEntries[lootHistoryID] then
+        local e = lootHistoryEntries[lootHistoryID]
+        if itemLink and (not e.itemLink or not e.itemLink:find("|Hitem:", 1, true)) then
+            e.itemLink = itemLink
+            e.itemID = e.itemID or ExtractItemID(itemLink)
+            e.itemName = ExtractItemName(itemLink) or e.itemName
+        end
+        return e
+    end
+    local itemID = ExtractItemID(itemLink)
+    local playerKey = type(playerName) == "string" and ShortName(playerName):lower() or nil
+    for _, e in ipairs(activeRollEntries) do
+        if not e.finished and EntryMatchesItem(e, itemLink, itemID) then
+            local existing = playerKey and e.participants and e.participants[playerKey]
+            local skip = false
+            if isRollNumber and existing and existing.roll then
+                skip = true
+            end
+            if not skip then
+                if lootHistoryID and not e.lootHistoryID then
+                    e.lootHistoryID = lootHistoryID
+                    lootHistoryEntries[lootHistoryID] = e
+                end
+                if itemLink and (not e.itemLink or not e.itemLink:find("|Hitem:", 1, true)) then
+                    e.itemLink = itemLink
+                end
+                return e
+            end
+        end
+    end
+    if isOutcome then
+        for i = #activeRollEntries, 1, -1 do
+            local e = activeRollEntries[i]
+            if not e.finished and EntryMatchesItem(e, itemLink, itemID) then
+                return e
+            end
+        end
+    end
+    return CreateRollEntry(itemLink, nil, lootHistoryID)
+end
+
+local function RecordParticipant(entry, playerName, choice, rollNumber, isSelf, classToken)
+    if not entry then
+        return nil
+    end
+    local resolvedSelf = isSelf or IsSelfPlayer(playerName)
+    local displayName = resolvedSelf and PlayerSelfName() or (playerName or "?")
+    local key = ShortName(displayName):lower()
+    if key == "" then
+        return nil
+    end
+    entry.participants = entry.participants or {}
+    local p = entry.participants[key]
+    if not p then
+        entry.participantOrder = (entry.participantOrder or 0) + 1
+        p = {
+            name = displayName,
+            order = entry.participantOrder,
+            isSelf = resolvedSelf,
+        }
+        entry.participants[key] = p
+    else
+        if resolvedSelf then
+            p.isSelf = true
+            p.name = PlayerSelfName()
+        elseif #displayName > #p.name then
+            p.name = displayName
+        end
+    end
+    if choice then
+        p.choice = choice
+    end
+    if type(rollNumber) == "number" then
+        p.roll = rollNumber
+    end
+    if classToken then
+        p.class = classToken
+    elseif not p.class then
+        p.class = LookupPlayerClass(p.name)
+    end
+    return p
+end
+
+local function SortedParticipants(entry)
+    local list = {}
+    for _, p in pairs((entry and entry.participants) or {}) do
+        list[#list + 1] = p
+    end
+    table.sort(list, function(a, b)
+        local wa = a.isWinner and 1 or 0
+        local wb = b.isWinner and 1 or 0
+        if wa ~= wb then
+            return wa > wb
+        end
+        local ca = CHOICE_PRIORITY[a.choice] or 9
+        local cb = CHOICE_PRIORITY[b.choice] or 9
+        if ca ~= cb then
+            return ca < cb
+        end
+        local ra = a.roll or -1
+        local rb = b.roll or -1
+        if ra ~= rb then
+            return ra > rb
+        end
+        return (a.order or 0) < (b.order or 0)
+    end)
+    return list
+end
+
+local function CountParticipants(entry)
+    local n = 0
+    for _ in pairs((entry and entry.participants) or {}) do
+        n = n + 1
+    end
+    return n
+end
+
+local function MapLootHistoryState(state)
+    local s = Enum and Enum.EncounterLootDropRollState
+    if s then
+        if state == s.NeedMainSpec or state == s.NeedOffSpec then
+            return "need"
+        elseif state == s.Greed then
+            return "greed"
+        elseif state == s.Transmog then
+            return "transmog"
+        elseif state == s.Pass then
+            return "pass"
+        elseif state == s.Disenchant then
+            return "de"
+        end
+    end
+    if state == 1 then
+        return "need"
+    elseif state == 2 then
+        return "greed"
+    elseif state == 3 then
+        return "de"
+    elseif state == 4 then
+        return "transmog"
+    elseif state == 0 then
+        return "pass"
+    end
+    return nil
+end
+
+local function InvalidateEntryInChat(entry)
+    if not entry or not entry.id then
+        return
+    end
+    if Chattynator and Chattynator.API and Chattynator.API.InvalidateMessage and runtimeChatIds[entry.id] then
+        for msgId in pairs(runtimeChatIds[entry.id]) do
+            pcall(Chattynator.API.InvalidateMessage, msgId)
+        end
+    end
+end
+
+local function SyncEntryFromLootHistory(entry)
+    if not entry or not C_LootHistory then
+        return
+    end
+    local now = time()
+    if C_LootHistory.GetNumItems and C_LootHistory.GetItem and C_LootHistory.GetPlayerInfo then
+        local okN, numItems = pcall(C_LootHistory.GetNumItems)
+        numItems = okN and tonumber(Plain(numItems))
+        if numItems and numItems > 0 then
+            for i = 1, math.min(numItems, 30) do
+                local okI, itemIdx, link, numPlayers = pcall(C_LootHistory.GetItem, i)
+                link = okI and Plain(link)
+                numPlayers = okI and tonumber(Plain(numPlayers))
+                if okI and link and numPlayers and EntryMatchesItem(entry, link, ExtractItemID(link)) then
+                    if entry.lootHistoryID and Plain(itemIdx) and tonumber(Plain(itemIdx)) ~= entry.lootHistoryID then
+                        if now - (entry.startedAt or now) > 120 then
+                            numPlayers = 0
+                        end
+                    end
+                    for j = 1, math.min(numPlayers, 40) do
+                        local okP, name, classToken, rollType, roll, isWinner, isMe = pcall(C_LootHistory.GetPlayerInfo, i, j)
+                        if okP then
+                            local pname = Plain(name)
+                            local pme = Plain(isMe) and true or false
+                            local pchoice = MapLootHistoryState(tonumber(Plain(rollType)))
+                            local proll = tonumber(Plain(roll))
+                            local pclass = Plain(classToken)
+                            if pname or pme then
+                                local p = RecordParticipant(entry, pname, pchoice, proll, pme, pclass)
+                                if p and Plain(isWinner) then
+                                    p.isWinner = true
+                                    entry.winner = p.name
+                                    entry.winnerClass = p.class
+                                    entry.winIsSelf = p.isSelf
+                                    entry.winType = p.choice or entry.winType
+                                    entry.winRoll = p.roll or entry.winRoll
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+local function SyncDropFromLootHistory(encounterID, lootListID)
+    if not (C_LootHistory and C_LootHistory.GetSortedInfoForDrop) or not encounterID or not lootListID then
+        return
+    end
+    local ok, info = pcall(C_LootHistory.GetSortedInfoForDrop, encounterID, lootListID)
+    if not ok or type(info) ~= "table" or type(info.rollInfos) ~= "table" then
+        return
+    end
+    local link = Plain(info.itemHyperlink)
+    if type(link) ~= "string" then
+        return
+    end
+    local itemID = ExtractItemID(link)
+    local targetEntry
+    for i = #activeRollEntries, 1, -1 do
+        local e = activeRollEntries[i]
+        if EntryMatchesItem(e, link, itemID) then
+            targetEntry = e
+            break
+        end
+    end
+    if not targetEntry and db and type(db.history) == "table" then
+        local now = time()
+        for _, e in ipairs(db.history) do
+            if now - (e.startedAt or now) < 300 and EntryMatchesItem(e, link, itemID) then
+                targetEntry = e
+                break
+            end
+        end
+    end
+    if not targetEntry then
+        return
+    end
+    for _, r in ipairs(info.rollInfos) do
+        if type(r) == "table" then
+            local pme = Plain(r.isSelf) and true or false
+            local pname = Plain(r.playerName)
+            local pchoice = MapLootHistoryState(tonumber(Plain(r.state)))
+            local proll = tonumber(Plain(r.roll))
+            if pname or pme then
+                local p = RecordParticipant(targetEntry, pname, pchoice, proll, pme)
+                if p and Plain(r.isWinner) then
+                    p.isWinner = true
+                    targetEntry.winner = p.name
+                    targetEntry.winnerClass = p.class
+                    targetEntry.winIsSelf = p.isSelf
+                    targetEntry.winType = p.choice or targetEntry.winType
+                    targetEntry.winRoll = p.roll or targetEntry.winRoll
+                end
+            end
+        end
+    end
+    InvalidateEntryInChat(targetEntry)
+    RefreshHistoryUI()
+end
+
+local function StripLootHistoryTag(fmt)
+    if type(fmt) ~= "string" then
+        return nil
+    end
+    local s, e = fmt:find("|HlootHistory:.-|h.-|h:?%s*")
+    if not s then
+        return fmt
+    end
+    local tagPos = tonumber(fmt:sub(s, e):match("%%(%d)%$"))
+    local rest = fmt:sub(1, s - 1) .. fmt:sub(e + 1)
+    if tagPos then
+        rest = rest:gsub("%%(%d)%$", function(pos)
+            pos = tonumber(pos)
+            return "%" .. (pos > tagPos and pos - 1 or pos) .. "$"
+        end)
+    end
+    return rest
+end
+
+local function EscapeLuaPattern(text)
+    return (text:gsub("([%(%)%.%%%+%-%*%?%[%]%^%$])", "%%%1"))
+end
+
+local function FormatToPattern(fmt)
+    local stripped = StripLootHistoryTag(fmt)
+    if not stripped or stripped == "" then
+        return nil
+    end
+    local parts = { "^" }
+    local map = {}
+    local types = {}
+    local seq = 0
+    local pos = 1
+    local len = #stripped
+    while pos <= len do
+        local pStart = stripped:find("%%", pos, true)
+        if not pStart then
+            parts[#parts + 1] = EscapeLuaPattern(stripped:sub(pos))
+            break
+        end
+        if pStart > pos then
+            parts[#parts + 1] = EscapeLuaPattern(stripped:sub(pos, pStart - 1))
+        end
+        local nextChar = stripped:sub(pStart + 1, pStart + 1)
+        if nextChar == "%" then
+            parts[#parts + 1] = "%%"
+            pos = pStart + 2
+        else
+            local posIdx, spec = stripped:match("^%%(%d+)%$([sd])", pStart)
+            local tokenEnd
+            if posIdx then
+                tokenEnd = pStart + #posIdx + 2
+            else
+                spec = stripped:match("^%%([sd])", pStart)
+                if spec then
+                    tokenEnd = pStart + 1
+                end
+            end
+            if spec then
+                local argIdx
+                if posIdx then
+                    argIdx = tonumber(posIdx)
+                else
+                    seq = seq + 1
+                    argIdx = seq
+                end
+                map[#map + 1] = argIdx
+                types[#types + 1] = spec
+                local rest = stripped:sub(tokenEnd + 1)
+                if spec == "d" then
+                    parts[#parts + 1] = "(%d+)"
+                elseif rest == "" then
+                    parts[#parts + 1] = "(.+)"
+                else
+                    parts[#parts + 1] = "(.-)"
+                end
+                pos = tokenEnd + 1
+            else
+                parts[#parts + 1] = "%%"
+                pos = pStart + 1
+            end
+        end
+    end
+    parts[#parts + 1] = "$"
+    return {
+        regex = table.concat(parts),
+        map = map,
+        types = types,
+    }
+end
+
+local function GetRollPatterns()
+    if rollPatterns then
+        return rollPatterns
+    end
+    rollPatterns = {}
+    local function add(globalName, info)
+        local fmt = _G[globalName]
+        local compiled = FormatToPattern(fmt)
+        if compiled then
+            compiled.kind = info.kind
+            compiled.choice = info.choice
+            compiled.isSelf = info.isSelf
+            rollPatterns[#rollPatterns + 1] = compiled
+        end
+    end
+
+    add("LOOT_ROLL_YOU_WON_NO_SPAM_NEED", { kind = "outcome", choice = "need", isSelf = true })
+    add("LOOT_ROLL_WON_NO_SPAM_NEED", { kind = "outcome", choice = "need", isSelf = false })
+    add("LOOT_ROLL_YOU_WON_NO_SPAM_GREED", { kind = "outcome", choice = "greed", isSelf = true })
+    add("LOOT_ROLL_WON_NO_SPAM_GREED", { kind = "outcome", choice = "greed", isSelf = false })
+    add("LOOT_ROLL_YOU_WON_NO_SPAM_DE", { kind = "outcome", choice = "de", isSelf = true })
+    add("LOOT_ROLL_WON_NO_SPAM_DE", { kind = "outcome", choice = "de", isSelf = false })
+    add("LOOT_ROLL_YOU_WON_NO_SPAM_DISENCHANT", { kind = "outcome", choice = "de", isSelf = true })
+    add("LOOT_ROLL_WON_NO_SPAM_DISENCHANT", { kind = "outcome", choice = "de", isSelf = false })
+    add("LOOT_ROLL_YOU_WON_NO_SPAM_TRANSMOG", { kind = "outcome", choice = "transmog", isSelf = true })
+    add("LOOT_ROLL_WON_NO_SPAM_TRANSMOG", { kind = "outcome", choice = "transmog", isSelf = false })
+    add("LOOT_ROLL_YOU_WON", { kind = "outcome", isSelf = true })
+    add("LOOT_ROLL_WON", { kind = "outcome", isSelf = false })
+    add("LOOT_ROLL_ALL_PASSED", { kind = "allPassed" })
+
+    add("LOOT_ROLL_ROLLED_NEED_ROLE_BONUS", { kind = "roll", choice = "need" })
+    add("LOOT_ROLL_ROLLED_NEED", { kind = "roll", choice = "need" })
+    add("LOOT_ROLL_ROLLED_GREED", { kind = "roll", choice = "greed" })
+    add("LOOT_ROLL_ROLLED_DE", { kind = "roll", choice = "de" })
+    add("LOOT_ROLL_ROLLED_DISENCHANT", { kind = "roll", choice = "de" })
+    add("LOOT_ROLL_ROLLED_TRANSMOG", { kind = "roll", choice = "transmog" })
+
+    add("LOOT_ROLL_NEED_SELF", { kind = "select", choice = "need", isSelf = true })
+    add("LOOT_ROLL_NEED", { kind = "select", choice = "need", isSelf = false })
+    add("LOOT_ROLL_GREED_SELF", { kind = "select", choice = "greed", isSelf = true })
+    add("LOOT_ROLL_GREED", { kind = "select", choice = "greed", isSelf = false })
+    add("LOOT_ROLL_DISENCHANT_SELF", { kind = "select", choice = "de", isSelf = true })
+    add("LOOT_ROLL_DISENCHANT", { kind = "select", choice = "de", isSelf = false })
+    add("LOOT_ROLL_TRANSMOG_SELF", { kind = "select", choice = "transmog", isSelf = true })
+    add("LOOT_ROLL_TRANSMOG", { kind = "select", choice = "transmog", isSelf = false })
+    add("LOOT_ROLL_PASSED_SELF", { kind = "select", choice = "pass", isSelf = true })
+    add("LOOT_ROLL_PASSED_SELF_AUTO", { kind = "select", choice = "pass", isSelf = true })
+    add("LOOT_ROLL_PASSED", { kind = "select", choice = "pass", isSelf = false })
+    add("LOOT_ROLL_PASSED_AUTO", { kind = "select", choice = "pass", isSelf = false })
+    add("LOOT_ROLL_PASSED_AUTO_FEMALE", { kind = "select", choice = "pass", isSelf = false })
+    add("LOOT_ROLL_LOST", { kind = "lost" })
+    return rollPatterns
+end
+
+local function ProtectLinks(text)
+    local saved = {}
+    local function stash(link)
+        saved[#saved + 1] = link
+        return "\001L" .. #saved .. "\001"
+    end
+    local masked = text:gsub("(|c%x%x%x%x%x%x%x%x|H.-|h%[.-%]|h|r)", stash)
+    masked = masked:gsub("(|H.-|h%[.-%]|h)", stash)
+    return masked, saved
+end
+
+local function RestoreLinks(val, saved)
+    if type(val) ~= "string" then
+        return val
+    end
+    return (val:gsub("\001L(%d+)\001", function(idx)
+        return saved[tonumber(idx)] or ""
+    end))
+end
+
+local function MatchLootRollLine(rawText)
+    if type(rawText) ~= "string" or rawText == "" then
+        return nil
+    end
+    local lootHistoryID
+    local cleanText = rawText
+    local lhStr, _, tagEnd = rawText:match("^|HlootHistory:(%d+)|h.-|h:?%s*()")
+    if lhStr and tagEnd then
+        lootHistoryID = tonumber(lhStr)
+        cleanText = rawText:sub(tagEnd)
+    else
+        local s, e = rawText:find("^|HlootHistory:.-|h.-|h:?%s*")
+        if s and e then
+            cleanText = rawText:sub(e + 1)
+        end
+    end
+    local masked, savedLinks = ProtectLinks(cleanText)
+    for _, pat in ipairs(GetRollPatterns()) do
+        local caps = { masked:match(pat.regex) }
+        if #caps > 0 then
+            local itemLink, rollNumber, playerName
+            for i, cap in ipairs(caps) do
+                local restored = RestoreLinks(cap, savedLinks)
+                if pat.types[i] == "d" then
+                    if not rollNumber and tonumber(restored) then
+                        rollNumber = tonumber(restored)
+                    end
+                elseif restored:find("|Hitem:", 1, true) or restored:find("|h%[") then
+                    itemLink = itemLink or restored
+                else
+                    local idx = pat.map[i]
+                    if idx and not playerName and restored ~= "" then
+                        playerName = restored
+                    end
+                end
+            end
+            return pat, lootHistoryID, itemLink, playerName, rollNumber
+        end
+    end
+    return nil
+end
+
+local function BuildExpandedLines(entry)
+    local sorted = SortedParticipants(entry)
+    if #sorted == 0 then
+        return "  " .. L.NO_PARTICIPANTS
+    end
+    local lines = {}
+    for _, p in ipairs(sorted) do
+        local mark = p.isWinner and "|TInterface\\GroupFrame\\UI-Group-LeaderIcon:12:12|t " or "  "
+        local rollPart = p.roll and (" |cffffffff" .. p.roll .. "|r") or ""
+        lines[#lines + 1] = "  " .. mark .. ChoiceColoredText(p.choice) .. rollPart .. " — " .. ColorizeName(p.name, p.class)
+    end
+    return table.concat(lines, "\n")
+end
+
+local function FormatEntryBaseLine(entry)
+    local count = CountParticipants(entry)
+    local arrow = entry.expanded and "-" or "+"
+    local toggleLabel = (count > 0) and (arrow .. " " .. L.ROLLS_BTN .. " (" .. count .. ")") or (arrow .. " " .. L.ROLLS_BTN)
+    local toggleLink = "|Haddon:rwmf:toggle:" .. entry.id .. "|h|cff33ff99[" .. toggleLabel .. "]|r|h"
+    local itemPart = entry.itemLink or entry.itemName or "item"
+    local outcomePart
+    if entry.allPassed then
+        outcomePart = " — |cff999999" .. L.ALL_PASSED .. "|r"
+    elseif entry.winner then
+        local winnerColored = ColorizeName(entry.winner, entry.winnerClass)
+        local winMeta = ""
+        if entry.winType or entry.winRoll then
+            local bits = {}
+            if entry.winType then
+                bits[#bits + 1] = ChoiceColoredText(entry.winType)
+            end
+            if entry.winRoll then
+                bits[#bits + 1] = "|cffffffff" .. entry.winRoll .. "|r"
+            end
+            winMeta = " (" .. table.concat(bits, " ") .. ")"
+        end
+        if entry.winIsSelf then
+            outcomePart = " — |cff33ff99" .. L.YOU_WON .. "|r" .. winMeta
+        else
+            outcomePart = " — " .. string.format(L.WON_BY, winnerColored) .. winMeta
+        end
+    else
+        outcomePart = " — " .. L.IN_PROGRESS
+    end
+    local detailsLink = ""
+    if db and db.chatRollButton then
+        detailsLink = " |Haddon:rwmf:open:" .. entry.id .. "|h|cff66ccff[" .. L.DETAILS_BTN .. "]|r|h"
+    end
+    return toggleLink .. " " .. itemPart .. outcomePart .. detailsLink
+end
+
+local function FormatEntryChatText(entry)
+    local base = FormatEntryBaseLine(entry)
+    if entry.expanded then
+        return base .. "\n" .. BuildExpandedLines(entry)
+    end
+    return base
+end
+
+local function ApplyExpandedToChatText(baseLine, entry)
+    local count = CountParticipants(entry)
+    local arrow = entry.expanded and "-" or "+"
+    local toggleLabel = (count > 0) and (arrow .. " " .. L.ROLLS_BTN .. " (" .. count .. ")") or (arrow .. " " .. L.ROLLS_BTN)
+    local updated = baseLine:gsub("(|Haddon:rwmf:toggle:" .. entry.id .. "|h|cff%x%x%x%x%x%x)%[(.-)%](|r|h)", "%1[" .. toggleLabel .. "]%3")
+    if entry.expanded then
+        return updated .. "\n" .. BuildExpandedLines(entry)
+    end
+    return updated
+end
+
+local function ToggleEntryInChat(entryId)
+    local entry = GetEntryById(entryId)
+    if not entry then
+        return
+    end
+    entry.expanded = not entry.expanded
+    local updatedAny = false
+    if Chattynator and Chattynator.API and Chattynator.API.InvalidateMessage and runtimeChatIds[entry.id] then
+        for msgId in pairs(runtimeChatIds[entry.id]) do
+            pcall(Chattynator.API.InvalidateMessage, msgId)
+            updatedAny = true
+        end
+    end
+    local tag = "|Haddon:rwmf:toggle:" .. entry.id .. "|h"
+    local numWindows = NUM_CHAT_WINDOWS or 10
+    for w = 1, numWindows do
+        local cf = _G["ChatFrame" .. w]
+        if cf and cf.historyBuffer and cf.historyBuffer.GetNumElements and cf.historyBuffer.GetEntryAtIndex then
+            local changed = false
+            local total = cf.historyBuffer:GetNumElements()
+            for i = 1, total do
+                local msgObj = cf.historyBuffer:GetEntryAtIndex(i)
+                if msgObj and type(msgObj.message) == "string" and msgObj.message:find(tag, 1, true) then
+                    local firstLine = msgObj.message:match("^([^\n]+)") or msgObj.message
+                    msgObj.message = ApplyExpandedToChatText(firstLine, entry)
+                    changed = true
+                    updatedAny = true
+                end
+            end
+            if changed then
+                if cf.MarkDisplayDirty then
+                    pcall(cf.MarkDisplayDirty, cf)
+                end
+                if cf.RefreshDisplay then
+                    pcall(cf.RefreshDisplay, cf)
+                end
+            end
+        end
+    end
+    if not updatedAny and entry.expanded and DEFAULT_CHAT_FRAME then
+        DEFAULT_CHAT_FRAME:AddMessage((entry.itemLink or entry.itemName) .. ":\n" .. BuildExpandedLines(entry))
+    end
+end
+
+local function CacheChatDecision(lineID, result)
+    if not lineID then
+        return
+    end
+    chatLineCache[lineID] = result
+    chatLineOrder[#chatLineOrder + 1] = lineID
+    if #chatLineOrder > 80 then
+        local old = table.remove(chatLineOrder, 1)
+        chatLineCache[old] = nil
+    end
+end
+
+local function ProcessLootChatLine(rawText, lineID)
+    if lineID and chatLineCache[lineID] then
+        return chatLineCache[lineID]
+    end
+    local pat, lootHistoryID, itemLink, playerName, rollNumber = MatchLootRollLine(rawText)
+    if not pat then
+        local res = { action = "pass" }
+        CacheChatDecision(lineID, res)
+        return res
+    end
+    if pat.kind == "lost" then
+        local res = { action = "intermediate" }
+        CacheChatDecision(lineID, res)
+        return res
+    end
+    if pat.kind == "select" or pat.kind == "roll" then
+        local entry = FindOrCreateEntryForChat(itemLink, lootHistoryID, playerName, pat.kind == "roll", false)
+        RecordParticipant(entry, playerName, pat.choice, rollNumber, pat.isSelf)
+        local res = { action = "intermediate", entry = entry }
+        CacheChatDecision(lineID, res)
+        RefreshHistoryUI()
+        return res
+    end
+    if pat.kind == "allPassed" or pat.kind == "outcome" then
+        local entry = FindOrCreateEntryForChat(itemLink, lootHistoryID, playerName, false, true)
+        if pat.kind == "allPassed" then
+            entry.allPassed = true
+            entry.finished = true
+            entry.finishedAt = time()
+            SyncEntryFromLootHistory(entry)
+        else
+            local winnerName = pat.isSelf and PlayerSelfName() or (playerName or "?")
+            local p = RecordParticipant(entry, winnerName, pat.choice, rollNumber, pat.isSelf)
+            SyncEntryFromLootHistory(entry)
+            if p then
+                p.isWinner = true
+                entry.winner = p.name
+                entry.winnerClass = p.class
+                entry.winIsSelf = p.isSelf
+                entry.winType = p.choice or entry.winType
+                entry.winRoll = p.roll or entry.winRoll
+            else
+                entry.winner = winnerName
+                entry.winIsSelf = pat.isSelf or IsSelfPlayer(winnerName)
+                entry.winType = pat.choice
+                entry.winRoll = rollNumber
+            end
+            entry.finished = true
+            entry.finishedAt = time()
+        end
+        RefreshHistoryUI()
+        local res = { action = "outcome", entry = entry }
+        CacheChatDecision(lineID, res)
+        return res
+    end
+    local res = { action = "pass" }
+    CacheChatDecision(lineID, res)
+    return res
+end
+
+local function LootChatFilter(_, _, msg, ...)
+    if not db or (not db.groupRollChat and not db.chatRollButton) then
+        return false
+    end
+    if issecretvalue and issecretvalue(msg) then
+        return false
+    end
+    local lineID = select(10, ...)
+    local res = ProcessLootChatLine(msg, lineID)
+    if res.action == "intermediate" then
+        if db.groupRollChat then
+            return true
+        end
+        return false
+    end
+    if res.action == "outcome" and res.entry then
+        if db.groupRollChat then
+            return false, FormatEntryChatText(res.entry), ...
+        elseif db.chatRollButton then
+            local btn = " |Haddon:rwmf:open:" .. res.entry.id .. "|h|cff66ccff[" .. L.ROLLS_BTN .. "]|r|h"
+            return false, msg .. btn, ...
+        end
+    end
+    return false
+end
+
+local function ShowRollLinkTooltip(owner, link)
+    if type(link) ~= "string" then
+        return
+    end
+    local cmd, idStr = link:match("^addon:rwmf:(%a+):(%d+)$")
+    if not cmd then
+        return
+    end
+    local entry = GetEntryById(idStr)
+    if not entry then
+        return
+    end
+    GameTooltip:SetOwner(owner, "ANCHOR_CURSOR_RIGHT")
+    local r, g, b = ItemQualityColor(entry.itemQuality)
+    GameTooltip:AddLine(entry.itemName or "Item", r, g, b)
+    if entry.allPassed then
+        GameTooltip:AddLine(L.ALL_PASSED, 0.7, 0.7, 0.7)
+    elseif entry.winner then
+        GameTooltip:AddLine(string.format(L.WON_BY, entry.winner), 0.2, 1, 0.6)
+    end
+    GameTooltip:AddLine(" ")
+    local sorted = SortedParticipants(entry)
+    if #sorted == 0 then
+        GameTooltip:AddLine(L.NO_PARTICIPANTS, 0.7, 0.7, 0.7, true)
+    else
+        for _, p in ipairs(sorted) do
+            local left = (p.isWinner and "|TInterface\\GroupFrame\\UI-Group-LeaderIcon:12:12|t " or "") .. ColorizeName(p.name, p.class)
+            local right = ChoiceColoredText(p.choice) .. (p.roll and (" |cffffffff" .. p.roll .. "|r") or "")
+            GameTooltip:AddDoubleLine(left, right)
+        end
+    end
+    GameTooltip:AddLine(" ")
+    GameTooltip:AddLine(cmd == "toggle" and L.TOOLTIP_CLICK_TOGGLE or L.TOOLTIP_CLICK_OPEN, 0.5, 0.8, 1)
+    GameTooltip:Show()
+end
+
+local function HandleCustomHyperlink(link)
+    if type(link) ~= "string" then
+        return
+    end
+    local cmd, idStr = link:match("^addon:rwmf:(%a+):(%d+)$")
+    if not cmd then
+        return
+    end
+    local id = tonumber(idStr)
+    if cmd == "toggle" then
+        ToggleEntryInChat(id)
+    elseif cmd == "open" then
+        OpenRollDetails(id)
+    end
+end
+
+InstallChatIntegrations = function()
+    if not chatFilterInstalled and ChatFrame_AddMessageEventFilter then
+        chatFilterInstalled = true
+        ChatFrame_AddMessageEventFilter("CHAT_MSG_LOOT", LootChatFilter)
+    end
+    if not chattynatorModifierInstalled and Chattynator and Chattynator.API and Chattynator.API.AddModifier then
+        chattynatorModifierInstalled = true
+        Chattynator.API.AddModifier(function(data)
+            local text = Plain(data and data.text)
+            if type(text) ~= "string" then
+                return
+            end
+            local idStr = text:match("|Haddon:rwmf:toggle:(%d+)|h")
+            if not idStr then
+                return
+            end
+            local entry = GetEntryById(idStr)
+            if not entry then
+                return
+            end
+            if data.id then
+                runtimeChatIds[entry.id] = runtimeChatIds[entry.id] or {}
+                runtimeChatIds[entry.id][data.id] = true
+            end
+            local base = text:match("^([^\n]+)") or text
+            data.text = ApplyExpandedToChatText(base, entry)
+        end)
+        if Chattynator.API.GetHyperlinkHandler then
+            local handler = Chattynator.API.GetHyperlinkHandler()
+            if handler and handler.HookScript and not hooked["chattynatorHover"] then
+                hooked["chattynatorHover"] = true
+                handler:HookScript("OnHyperlinkEnter", function(self, link)
+                    if type(link) == "string" and link:find("^addon:rwmf:") then
+                        ShowRollLinkTooltip(self:GetParent() or self, link)
+                    end
+                end)
+                handler:HookScript("OnHyperlinkLeave", function()
+                    GameTooltip:Hide()
+                end)
+            end
+        end
+    end
+    if not hyperlinkHookInstalled then
+        hyperlinkHookInstalled = true
+        if EventRegistry and EventRegistry.RegisterCallback then
+            EventRegistry:RegisterCallback("SetItemRef", function(_, link)
+                HandleCustomHyperlink(link)
+            end)
+        elseif SetItemRef then
+            hooksecurefunc("SetItemRef", function(link)
+                HandleCustomHyperlink(link)
+            end)
+        end
+    end
+    local numWindows = NUM_CHAT_WINDOWS or 10
+    for w = 1, numWindows do
+        local cf = _G["ChatFrame" .. w]
+        if cf and cf.HookScript and not hooked["chatHover" .. w] then
+            hooked["chatHover" .. w] = true
+            cf:HookScript("OnHyperlinkEnter", function(self, link)
+                if type(link) == "string" and link:find("^addon:rwmf:") then
+                    ShowRollLinkTooltip(self, link)
+                end
+            end)
+            cf:HookScript("OnHyperlinkLeave", function()
+                if GameTooltip:IsShown() then
+                    GameTooltip:Hide()
+                end
+            end)
+        end
+    end
+end
+
+local function EmitEntryToChat(entry)
+    if not entry then
+        return
+    end
+    local info = (ChatTypeInfo and ChatTypeInfo.LOOT) or { r = 0, g = 0.67, b = 0 }
+    local text
+    if db and db.groupRollChat then
+        text = FormatEntryChatText(entry)
+    else
+        local base = entry.itemLink or entry.itemName
+        if entry.winner then
+            base = string.format(L.WON_BY, ColorizeName(entry.winner, entry.winnerClass)) .. ": " .. base
+        else
+            base = L.ALL_PASSED .. ": " .. base
+        end
+        if db and db.chatRollButton then
+            base = base .. " |Haddon:rwmf:open:" .. entry.id .. "|h|cff66ccff[" .. L.ROLLS_BTN .. "]|r|h"
+        end
+        text = base
+    end
+    if DEFAULT_CHAT_FRAME and DEFAULT_CHAT_FRAME.AddMessage then
+        DEFAULT_CHAT_FRAME:AddMessage(text, info.r, info.g, info.b)
+    else
+        print(text)
+    end
+end
+
+local TEST_NPC_PARTY = {
+    { name = "Grommash", class = "WARRIOR" },
+    { name = "Tyrande", class = "PRIEST" },
+    { name = "Jaina", class = "MAGE" },
+    { name = "Valeera", class = "ROGUE" },
+}
+
+RecordTestRollResult = function(testItem, rollType)
+    if not testItem then
+        return
+    end
+    local typeMap = { [0] = "pass", [1] = "need", [2] = "greed", [3] = "de", [4] = "transmog" }
+    local selfChoice = typeMap[rollType] or "pass"
+    local entry = CreateRollEntry(
+        testItem.resolvedLink or ("item:" .. testItem.id),
+        testItem.rollID,
+        nil,
+        testItem.resolvedIcon or testItem.icon,
+        testItem.resolvedQuality or testItem.quality,
+        testItem.resolvedName or testItem.name
+    )
+    entry.isTest = true
+    local selfRoll = (selfChoice ~= "pass") and math.random(1, 100) or nil
+    local _, selfClass = UnitClass("player")
+    RecordParticipant(entry, PlayerSelfName(), selfChoice, selfRoll, true, selfClass)
+
+    local allPassTest = (selfChoice == "pass" and math.random(1, 4) == 1)
+    for idx, npc in ipairs(TEST_NPC_PARTY) do
+        local npcChoice = "pass"
+        local npcRoll = nil
+        if not allPassTest then
+            local r = math.random(1, 100)
+            if selfChoice == "need" then
+                npcChoice = (r <= 45 and "need") or (r <= 80 and "greed") or "pass"
+            elseif idx <= 2 then
+                npcChoice = (r <= 65 and "greed") or (r <= 85 and "de") or "pass"
+            else
+                npcChoice = (r <= 50 and "greed") or "pass"
+            end
+            if npcChoice ~= "pass" then
+                npcRoll = math.random(1, 100)
+            end
+        end
+        RecordParticipant(entry, npc.name, npcChoice, npcRoll, false, npc.class)
+    end
+
+    local sorted = SortedParticipants(entry)
+    local best = sorted[1]
+    if best and best.choice ~= "pass" then
+        best.isWinner = true
+        entry.winner = best.name
+        entry.winnerClass = best.class
+        entry.winIsSelf = best.isSelf
+        entry.winType = best.choice
+        entry.winRoll = best.roll
+    else
+        entry.allPassed = true
+    end
+    entry.finished = true
+    entry.finishedAt = time()
+    RefreshHistoryUI()
+    EmitEntryToChat(entry)
+end
+
+local function CreateHistoryUI()
+    local frame = CreateFrame("Frame", "RollWindowMoverHistoryFrame", UIParent)
+    frame:SetSize(560, 380)
+    frame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+    frame:SetFrameStrata("DIALOG")
+    frame:SetClampedToScreen(true)
+    frame:SetMovable(true)
+    frame:EnableMouse(true)
+    frame:RegisterForDrag("LeftButton")
+    frame:SetScript("OnDragStart", frame.StartMoving)
+    frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
+    table.insert(UISpecialFrames, "RollWindowMoverHistoryFrame")
+
+    local bg = frame:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints()
+    bg:SetColorTexture(0.07, 0.08, 0.11, 0.96)
+    AddSlotBorder(frame, 0.2, 0.6, 1, 0.85)
+
+    local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    title:SetPoint("TOPLEFT", 16, -12)
+    title:SetText(L.HISTORY_TITLE)
+
+    local closeBtn = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
+    closeBtn:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -3, -3)
+    closeBtn:SetScript("OnClick", function()
+        frame:Hide()
+    end)
+
+    local dividerV = frame:CreateTexture(nil, "ARTWORK")
+    dividerV:SetWidth(1)
+    dividerV:SetPoint("TOPLEFT", frame, "TOPLEFT", 224, -36)
+    dividerV:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 224, 42)
+    dividerV:SetColorTexture(0.2, 0.4, 0.6, 0.5)
+
+    local listScroll = CreateFrame("ScrollFrame", "RWMF_HistoryListScroll", frame, "UIPanelScrollFrameTemplate")
+    listScroll:SetPoint("TOPLEFT", 10, -40)
+    listScroll:SetSize(190, 292)
+    local listChild = CreateFrame("Frame", nil, listScroll)
+    listChild:SetSize(190, 1)
+    listScroll:SetScrollChild(listChild)
+
+    local detailIconBtn = CreateFrame("Button", nil, frame)
+    detailIconBtn:SetSize(34, 34)
+    detailIconBtn:SetPoint("TOPLEFT", 236, -42)
+    local detailIcon = detailIconBtn:CreateTexture(nil, "ARTWORK")
+    detailIcon:SetAllPoints()
+    detailIconBtn.icon = detailIcon
+    detailIconBtn:SetScript("OnEnter", function(self)
+        local entry = selectedHistoryId and GetEntryById(selectedHistoryId)
+        if entry and entry.itemLink then
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetHyperlink(entry.itemLink)
+            GameTooltip:Show()
+        end
+    end)
+    detailIconBtn:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+    end)
+    detailIconBtn:SetScript("OnClick", function()
+        local entry = selectedHistoryId and GetEntryById(selectedHistoryId)
+        if entry and entry.itemLink and IsShiftKeyDown() and ChatEdit_InsertLink then
+            ChatEdit_InsertLink(entry.itemLink)
+        end
+    end)
+
+    local detailItemName = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    detailItemName:SetPoint("TOPLEFT", detailIconBtn, "TOPRIGHT", 10, -1)
+    detailItemName:SetPoint("RIGHT", frame, "RIGHT", -16, 0)
+    detailItemName:SetJustifyH("LEFT")
+    detailItemName:SetWordWrap(false)
+
+    local detailOutcome = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    detailOutcome:SetPoint("TOPLEFT", detailItemName, "BOTTOMLEFT", 0, -4)
+    detailOutcome:SetPoint("RIGHT", frame, "RIGHT", -16, 0)
+    detailOutcome:SetJustifyH("LEFT")
+
+    local sepD = frame:CreateTexture(nil, "ARTWORK")
+    sepD:SetHeight(1)
+    sepD:SetPoint("TOPLEFT", 236, -84)
+    sepD:SetPoint("TOPRIGHT", -14, -84)
+    sepD:SetColorTexture(0.2, 0.4, 0.6, 0.45)
+
+    local detailScroll = CreateFrame("ScrollFrame", "RWMF_HistoryDetailScroll", frame, "UIPanelScrollFrameTemplate")
+    detailScroll:SetPoint("TOPLEFT", 234, -92)
+    detailScroll:SetSize(296, 240)
+    local detailChild = CreateFrame("Frame", nil, detailScroll)
+    detailChild:SetSize(296, 1)
+    detailScroll:SetScrollChild(detailChild)
+
+    local emptyText = frame:CreateFontString(nil, "OVERLAY", "GameFontDisable")
+    emptyText:SetPoint("CENTER", 0, 10)
+    emptyText:SetWidth(420)
+    emptyText:SetText(L.NO_HISTORY)
+
+    local noPlayersText = detailScroll:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    noPlayersText:SetPoint("TOPLEFT", 6, -12)
+    noPlayersText:SetWidth(280)
+    noPlayersText:SetJustifyH("LEFT")
+    noPlayersText:SetText(L.NO_PARTICIPANTS)
+    noPlayersText:Hide()
+
+    local clearBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    clearBtn:SetSize(110, 24)
+    clearBtn:SetPoint("BOTTOMLEFT", 12, 10)
+    clearBtn:SetText(L.CLEAR_HISTORY)
+    clearBtn:SetScript("OnClick", function()
+        if db then
+            db.history = {}
+        end
+        historyById = {}
+        activeRollEntries = {}
+        lootHistoryEntries = {}
+        selectedHistoryId = nil
+        frame:Refresh()
+    end)
+
+    local countLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    countLabel:SetPoint("LEFT", clearBtn, "RIGHT", 12, 0)
+
+    local itemRows = {}
+    local playerRows = {}
+
+    local function GetItemRow(idx)
+        if itemRows[idx] then
+            return itemRows[idx]
+        end
+        local row = CreateFrame("Button", nil, listChild)
+        row:SetSize(188, 36)
+        row:SetPoint("TOPLEFT", 0, -(idx - 1) * 38)
+        local bgTex = row:CreateTexture(nil, "BACKGROUND")
+        bgTex:SetAllPoints()
+        bgTex:SetColorTexture(1, 1, 1, 0.04)
+        row.bgTex = bgTex
+        local hl = row:CreateTexture(nil, "HIGHLIGHT")
+        hl:SetAllPoints()
+        hl:SetColorTexture(0.2, 0.6, 1, 0.14)
+        local ico = row:CreateTexture(nil, "ARTWORK")
+        ico:SetSize(28, 28)
+        ico:SetPoint("LEFT", 4, 0)
+        row.icon = ico
+        local nameFS = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        nameFS:SetPoint("TOPLEFT", ico, "TOPRIGHT", 6, -1)
+        nameFS:SetPoint("RIGHT", row, "RIGHT", -4, 0)
+        nameFS:SetJustifyH("LEFT")
+        nameFS:SetWordWrap(false)
+        row.nameFS = nameFS
+        local subFS = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+        subFS:SetPoint("TOPLEFT", nameFS, "BOTTOMLEFT", 0, -2)
+        subFS:SetPoint("RIGHT", row, "RIGHT", -4, 0)
+        subFS:SetJustifyH("LEFT")
+        subFS:SetWordWrap(false)
+        row.subFS = subFS
+        row:SetScript("OnClick", function(self)
+            selectedHistoryId = self.entryId
+            frame:Refresh()
+        end)
+        row:SetScript("OnEnter", function(self)
+            local entry = self.entryId and GetEntryById(self.entryId)
+            if entry and entry.itemLink then
+                GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+                GameTooltip:SetHyperlink(entry.itemLink)
+                GameTooltip:Show()
+            end
+        end)
+        row:SetScript("OnLeave", function()
+            GameTooltip:Hide()
+        end)
+        itemRows[idx] = row
+        return row
+    end
+
+    local function GetPlayerRow(idx)
+        if playerRows[idx] then
+            return playerRows[idx]
+        end
+        local row = CreateFrame("Frame", nil, detailChild)
+        row:SetSize(290, 24)
+        row:SetPoint("TOPLEFT", 2, -(idx - 1) * 25)
+        local bgTex = row:CreateTexture(nil, "BACKGROUND")
+        bgTex:SetAllPoints()
+        bgTex:SetColorTexture(1, 1, 1, (idx % 2 == 0) and 0.03 or 0.06)
+        row.bgTex = bgTex
+        local star = row:CreateTexture(nil, "OVERLAY")
+        star:SetSize(13, 13)
+        star:SetPoint("LEFT", 6, 0)
+        star:SetTexture("Interface\\GroupFrame\\UI-Group-LeaderIcon")
+        star:Hide()
+        row.star = star
+        local nameFS = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        nameFS:SetPoint("LEFT", row, "LEFT", 24, 0)
+        nameFS:SetWidth(130)
+        nameFS:SetJustifyH("LEFT")
+        nameFS:SetWordWrap(false)
+        row.nameFS = nameFS
+        local choiceFS = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        choiceFS:SetPoint("LEFT", nameFS, "RIGHT", 6, 0)
+        choiceFS:SetWidth(84)
+        choiceFS:SetJustifyH("LEFT")
+        row.choiceFS = choiceFS
+        local rollFS = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        rollFS:SetPoint("RIGHT", -8, 0)
+        rollFS:SetWidth(36)
+        rollFS:SetJustifyH("RIGHT")
+        row.rollFS = rollFS
+        playerRows[idx] = row
+        return row
+    end
+
+    function frame:Refresh()
+        local list = (db and db.history) or {}
+        countLabel:SetText(#list .. " / " .. MAX_HISTORY)
+        local hasItems = #list > 0
+        emptyText:SetShown(not hasItems)
+        listScroll:SetShown(hasItems)
+        detailIconBtn:SetShown(hasItems)
+        detailItemName:SetShown(hasItems)
+        detailOutcome:SetShown(hasItems)
+        sepD:SetShown(hasItems)
+        detailScroll:SetShown(hasItems)
+        dividerV:SetShown(hasItems)
+
+        if not hasItems then
+            for _, r in ipairs(itemRows) do
+                r:Hide()
+            end
+            for _, r in ipairs(playerRows) do
+                r:Hide()
+            end
+            noPlayersText:Hide()
+            return
+        end
+
+        if not selectedHistoryId or not GetEntryById(selectedHistoryId) then
+            selectedHistoryId = list[1].id
+        end
+
+        for i, entry in ipairs(list) do
+            local row = GetItemRow(i)
+            row.entryId = entry.id
+            row.icon:SetTexture(entry.itemIcon or "Interface\\Icons\\INV_Misc_QuestionMark")
+            local r, g, b = ItemQualityColor(entry.itemQuality)
+            row.nameFS:SetText(entry.itemName or "Item")
+            row.nameFS:SetTextColor(r, g, b)
+            if entry.allPassed then
+                row.subFS:SetText(L.ALL_PASSED)
+            elseif entry.winner then
+                local suffix = entry.winRoll and (" (" .. entry.winRoll .. ")") or ""
+                row.subFS:SetText(entry.winner .. suffix)
+            else
+                row.subFS:SetText(L.IN_PROGRESS)
+            end
+            if entry.id == selectedHistoryId then
+                row.bgTex:SetColorTexture(0.15, 0.45, 0.8, 0.35)
+            else
+                row.bgTex:SetColorTexture(1, 1, 1, 0.04)
+            end
+            row:Show()
+        end
+        for i = #list + 1, #itemRows do
+            itemRows[i]:Hide()
+        end
+        listChild:SetHeight(math.max(1, #list * 38))
+
+        local selected = GetEntryById(selectedHistoryId)
+        if selected then
+            detailIconBtn.icon:SetTexture(selected.itemIcon or "Interface\\Icons\\INV_Misc_QuestionMark")
+            local r, g, b = ItemQualityColor(selected.itemQuality)
+            detailItemName:SetText(selected.itemLink or selected.itemName or "Item")
+            detailItemName:SetTextColor(r, g, b)
+            local timeStr = date and date("%H:%M", selected.finishedAt or selected.startedAt or time()) or ""
+            if selected.allPassed then
+                detailOutcome:SetText(L.ALL_PASSED .. (timeStr ~= "" and (" · " .. timeStr) or ""))
+            elseif selected.winner then
+                local meta = selected.winType and (" (" .. ChoiceColoredText(selected.winType) .. (selected.winRoll and (" " .. selected.winRoll) or "") .. ")") or ""
+                detailOutcome:SetText(string.format(L.WON_BY, ColorizeName(selected.winner, selected.winnerClass)) .. meta .. (timeStr ~= "" and (" · " .. timeStr) or ""))
+            else
+                detailOutcome:SetText(L.IN_PROGRESS)
+            end
+
+            local sorted = SortedParticipants(selected)
+            noPlayersText:SetShown(#sorted == 0)
+            for i, p in ipairs(sorted) do
+                local prow = GetPlayerRow(i)
+                prow.star:SetShown(p.isWinner and true or false)
+                prow.nameFS:SetText(ColorizeName(p.name, p.class))
+                prow.choiceFS:SetText(ChoiceColoredText(p.choice))
+                prow.rollFS:SetText(p.roll and tostring(p.roll) or "—")
+                if p.isWinner then
+                    prow.bgTex:SetColorTexture(0.2, 0.5, 0.25, 0.28)
+                    prow.rollFS:SetTextColor(1, 0.85, 0.2)
+                else
+                    prow.bgTex:SetColorTexture(1, 1, 1, (i % 2 == 0) and 0.03 or 0.06)
+                    prow.rollFS:SetTextColor(0.9, 0.9, 0.9)
+                end
+                prow:Show()
+            end
+            for i = #sorted + 1, #playerRows do
+                playerRows[i]:Hide()
+            end
+            detailChild:SetHeight(math.max(1, #sorted * 25))
+        end
+    end
+
+    frame:Hide()
+    return frame
+end
+
+RefreshHistoryUI = function()
+    if historyFrame and historyFrame:IsShown() and historyFrame.Refresh then
+        historyFrame:Refresh()
+    end
+end
+
+OpenRollDetails = function(entryId)
+    if not historyFrame then
+        return
+    end
+    if entryId then
+        selectedHistoryId = entryId
+    end
+    historyFrame:Show()
+    historyFrame:Refresh()
+end
+
+ToggleHistoryWindow = function()
+    if not historyFrame then
+        return
+    end
+    if historyFrame:IsShown() then
+        historyFrame:Hide()
+    else
+        OpenRollDetails(selectedHistoryId)
+    end
+end
+
+RecordStartLootRoll = function(rollID)
+    if not rollID or IsTestRoll(rollID) or not GetLootRollItemInfo then
+        return
+    end
+    for _, e in ipairs(activeRollEntries) do
+        if e.rollID == rollID then
+            return
+        end
+    end
+    local okInfo, texture, itemName, _, quality = pcall(GetLootRollItemInfo, rollID)
+    if not okInfo then
+        return
+    end
+    local okLink, itemLink = pcall(GetLootRollItemLink or function() return nil end, rollID)
+    CreateRollEntry(okLink and Plain(itemLink) or nil, rollID, nil, Plain(texture), Plain(quality), Plain(itemName))
+    RefreshHistoryUI()
+end
+
+SyncAllLootHistory = function()
+    for _, e in ipairs(activeRollEntries) do
+        if time() - (e.startedAt or time()) < 300 then
+            SyncEntryFromLootHistory(e)
+        end
+    end
+    RefreshHistoryUI()
 end
 
 local function UpdateMinimapButtonPosition()
@@ -1222,7 +2853,9 @@ local function CreateMinimapButton()
         self:SetScript("OnUpdate", nil)
     end)
     btn:SetScript("OnClick", function(_, button)
-        if IsShiftKeyDown() then
+        if IsShiftKeyDown() and button == "RightButton" then
+            ToggleHistoryWindow()
+        elseif IsShiftKeyDown() then
             if testActive then
                 StopTest()
                 Print("test roll window(s) hidden.")
@@ -1242,10 +2875,11 @@ local function CreateMinimapButton()
     btn:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_LEFT")
         GameTooltip:AddLine(TITLE)
-        GameTooltip:AddLine("Left-click: Unlock / Lock anchor", 1, 1, 1)
-        GameTooltip:AddLine("Right-click: Open Settings", 1, 1, 1)
-        GameTooltip:AddLine("Shift + Left-click: Toggle test rolls", 1, 1, 1)
-        GameTooltip:AddLine("Drag: Move around Minimap", 0.7, 0.7, 0.7)
+        GameTooltip:AddLine(L.MINIMAP_LCLICK, 1, 1, 1)
+        GameTooltip:AddLine(L.MINIMAP_RCLICK, 1, 1, 1)
+        GameTooltip:AddLine(L.MINIMAP_SHIFT_L, 1, 1, 1)
+        GameTooltip:AddLine(L.MINIMAP_SHIFT_R, 1, 1, 1)
+        GameTooltip:AddLine(L.MINIMAP_DRAG, 0.7, 0.7, 0.7)
         GameTooltip:Show()
     end)
     btn:SetScript("OnLeave", function()
@@ -1257,7 +2891,7 @@ end
 
 local function CreateSettingsUI()
     local frame = CreateFrame("Frame", "RollWindowMoverSettingsFrame", UIParent)
-    frame:SetSize(360, 390)
+    frame:SetSize(380, 470)
     frame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
     frame:SetFrameStrata("DIALOG")
     frame:SetClampedToScreen(true)
@@ -1266,6 +2900,7 @@ local function CreateSettingsUI()
     frame:RegisterForDrag("LeftButton")
     frame:SetScript("OnDragStart", frame.StartMoving)
     frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
+    table.insert(UISpecialFrames, "RollWindowMoverSettingsFrame")
 
     local bg = frame:CreateTexture(nil, "BACKGROUND")
     bg:SetAllPoints()
@@ -1274,7 +2909,7 @@ local function CreateSettingsUI()
 
     local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     title:SetPoint("TOP", 0, -14)
-    title:SetText(TITLE .. " Settings")
+    title:SetText(L.SETTINGS_TITLE)
 
     local closeBtn = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
     closeBtn:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -3, -3)
@@ -1283,7 +2918,7 @@ local function CreateSettingsUI()
     end)
 
     local lockBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    lockBtn:SetSize(150, 26)
+    lockBtn:SetSize(160, 26)
     lockBtn:SetPoint("TOPLEFT", frame, "TOPLEFT", 20, -42)
     lockBtn:SetScript("OnClick", function()
         if mover:IsShown() then
@@ -1294,9 +2929,9 @@ local function CreateSettingsUI()
     end)
 
     local resetBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    resetBtn:SetSize(150, 26)
+    resetBtn:SetSize(160, 26)
     resetBtn:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -20, -42)
-    resetBtn:SetText("Reset Defaults")
+    resetBtn:SetText(L.RESET_DEFAULTS)
     resetBtn:SetScript("OnClick", function()
         Reset()
     end)
@@ -1309,37 +2944,37 @@ local function CreateSettingsUI()
 
     local scaleSlider = CreateFrame("Slider", "RWMF_ScaleSlider", frame, "OptionsSliderTemplate")
     scaleSlider:SetPoint("TOPLEFT", frame, "TOPLEFT", 24, -104)
-    scaleSlider:SetWidth(310)
+    scaleSlider:SetWidth(330)
     scaleSlider:SetMinMaxValues(MIN_SCALE, MAX_SCALE)
     scaleSlider:SetValueStep(SCALE_STEP)
     scaleSlider:SetObeyStepOnDrag(true)
     _G[scaleSlider:GetName() .. "Low"]:SetText("50%")
     _G[scaleSlider:GetName() .. "High"]:SetText("200%")
     local scaleTitle = _G[scaleSlider:GetName() .. "Text"]
-    scaleTitle:SetText("Window Scale: 100%")
+    scaleTitle:SetText(string.format(L.WINDOW_SCALE, 100))
     scaleSlider:SetScript("OnValueChanged", function(_, val)
         val = math.floor((val / SCALE_STEP) + 0.5) * SCALE_STEP
         val = math.floor(val * 100 + 0.5) / 100
         if val ~= db.scale then
             SetScale(val)
         end
-        scaleTitle:SetText("Window Scale: " .. math.floor(val * 100 + 0.5) .. "%")
+        scaleTitle:SetText(string.format(L.WINDOW_SCALE, math.floor(val * 100 + 0.5)))
     end)
 
     local maxSlider = CreateFrame("Slider", "RWMF_MaxItemsSlider", frame, "OptionsSliderTemplate")
     maxSlider:SetPoint("TOPLEFT", frame, "TOPLEFT", 24, -156)
-    maxSlider:SetWidth(310)
+    maxSlider:SetWidth(330)
     maxSlider:SetMinMaxValues(1, 10)
     maxSlider:SetValueStep(1)
     maxSlider:SetObeyStepOnDrag(true)
     _G[maxSlider:GetName() .. "Low"]:SetText("1")
     _G[maxSlider:GetName() .. "High"]:SetText("10")
     local maxTitle = _G[maxSlider:GetName() .. "Text"]
-    maxTitle:SetText("Max Visible Items: 4")
+    maxTitle:SetText(string.format(L.MAX_ITEMS, 4))
     maxSlider:SetScript("OnValueChanged", function(_, val)
         val = math.floor(val + 0.5)
         db.maxItems = val
-        maxTitle:SetText("Max Visible Items: " .. val)
+        maxTitle:SetText(string.format(L.MAX_ITEMS, val))
         EnsureGroupLootFrames(val)
         ResizeMover()
         CheckRollQueue()
@@ -1347,80 +2982,106 @@ local function CreateSettingsUI()
 
     local maxHint = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     maxHint:SetPoint("TOPLEFT", maxSlider, "BOTTOMLEFT", 0, -4)
-    maxHint:SetText("Extra items wait in queue until active rolls finish.")
+    maxHint:SetText(L.MAX_HINT)
 
     local combatCheck = CreateFrame("CheckButton", "RWMF_CombatCheck", frame, "UICheckButtonTemplate")
-    combatCheck:SetPoint("TOPLEFT", frame, "TOPLEFT", 20, -208)
+    combatCheck:SetPoint("TOPLEFT", frame, "TOPLEFT", 20, -206)
     local combatText = _G[combatCheck:GetName() .. "Text"]
-    combatText:SetText("Hide loot roll windows while in combat")
+    combatText:SetText(L.HIDE_COMBAT)
     combatCheck:SetScript("OnClick", function(self)
         db.hideInCombat = self:GetChecked() and true or false
     end)
 
     local minimapCheck = CreateFrame("CheckButton", "RWMF_MinimapCheck", frame, "UICheckButtonTemplate")
-    minimapCheck:SetPoint("TOPLEFT", frame, "TOPLEFT", 20, -238)
+    minimapCheck:SetPoint("TOPLEFT", frame, "TOPLEFT", 20, -234)
     local minimapText = _G[minimapCheck:GetName() .. "Text"]
-    minimapText:SetText("Show Minimap button")
+    minimapText:SetText(L.SHOW_MINIMAP)
     minimapCheck:SetScript("OnClick", function(self)
         db.showMinimapButton = self:GetChecked() and true or false
         UpdateMinimapButtonPosition()
     end)
 
+    local groupChatCheck = CreateFrame("CheckButton", "RWMF_GroupChatCheck", frame, "UICheckButtonTemplate")
+    groupChatCheck:SetPoint("TOPLEFT", frame, "TOPLEFT", 20, -262)
+    local groupChatText = _G[groupChatCheck:GetName() .. "Text"]
+    groupChatText:SetText(L.GROUP_CHAT)
+    groupChatCheck:SetScript("OnClick", function(self)
+        db.groupRollChat = self:GetChecked() and true or false
+    end)
+
+    local chatBtnCheck = CreateFrame("CheckButton", "RWMF_ChatBtnCheck", frame, "UICheckButtonTemplate")
+    chatBtnCheck:SetPoint("TOPLEFT", frame, "TOPLEFT", 20, -290)
+    local chatBtnText = _G[chatBtnCheck:GetName() .. "Text"]
+    chatBtnText:SetText(L.CHAT_BUTTON)
+    chatBtnCheck:SetScript("OnClick", function(self)
+        db.chatRollButton = self:GetChecked() and true or false
+    end)
+
     local sep2 = frame:CreateTexture(nil, "ARTWORK")
     sep2:SetHeight(1)
-    sep2:SetPoint("TOPLEFT", frame, "TOPLEFT", 16, -274)
-    sep2:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -16, -274)
+    sep2:SetPoint("TOPLEFT", frame, "TOPLEFT", 16, -324)
+    sep2:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -16, -324)
     sep2:SetColorTexture(0.2, 0.4, 0.6, 0.5)
 
     local testLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    testLabel:SetPoint("TOPLEFT", frame, "TOPLEFT", 20, -286)
-    testLabel:SetText("Preview Test Rolls:")
+    testLabel:SetPoint("TOPLEFT", frame, "TOPLEFT", 20, -336)
+    testLabel:SetText(L.PREVIEW_ROLLS)
 
     local t1Btn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    t1Btn:SetSize(70, 24)
-    t1Btn:SetPoint("TOPLEFT", frame, "TOPLEFT", 24, -310)
-    t1Btn:SetText("1 Item")
+    t1Btn:SetSize(78, 24)
+    t1Btn:SetPoint("TOPLEFT", frame, "TOPLEFT", 20, -360)
+    t1Btn:SetText(L.ITEM_1)
     t1Btn:SetScript("OnClick", function()
         StartTest(1)
     end)
 
     local t4Btn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    t4Btn:SetSize(70, 24)
+    t4Btn:SetSize(78, 24)
     t4Btn:SetPoint("LEFT", t1Btn, "RIGHT", 8, 0)
-    t4Btn:SetText("4 Items")
+    t4Btn:SetText(L.ITEM_4)
     t4Btn:SetScript("OnClick", function()
         StartTest(4)
     end)
 
     local t10Btn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    t10Btn:SetSize(74, 24)
+    t10Btn:SetSize(82, 24)
     t10Btn:SetPoint("LEFT", t4Btn, "RIGHT", 8, 0)
-    t10Btn:SetText("10 Items")
+    t10Btn:SetText(L.ITEM_10)
     t10Btn:SetScript("OnClick", function()
         StartTest(10)
     end)
 
     local tStopBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    tStopBtn:SetSize(74, 24)
+    tStopBtn:SetSize(78, 24)
     tStopBtn:SetPoint("LEFT", t10Btn, "RIGHT", 8, 0)
-    tStopBtn:SetText("Stop Test")
+    tStopBtn:SetText(L.STOP_TEST)
     tStopBtn:SetScript("OnClick", function()
         StopTest()
         Print("test roll window(s) hidden.")
     end)
 
+    local historyBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    historyBtn:SetSize(340, 26)
+    historyBtn:SetPoint("TOPLEFT", frame, "TOPLEFT", 20, -396)
+    historyBtn:SetText(L.OPEN_HISTORY)
+    historyBtn:SetScript("OnClick", function()
+        ToggleHistoryWindow()
+    end)
+
     local authorInfo = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     authorInfo:SetPoint("BOTTOM", frame, "BOTTOM", 0, 14)
-    authorInfo:SetText("Roll Window Mover Forever v1.2.2 | Type /rollmove help")
+    authorInfo:SetText(L.VERSION_FOOTER)
 
     function frame:Refresh()
-        lockBtn:SetText(mover:IsShown() and "Lock Anchor" or "Unlock Anchor")
+        lockBtn:SetText(mover:IsShown() and L.LOCK_ANCHOR or L.UNLOCK_ANCHOR)
         scaleSlider:SetValue(db.scale or 1)
-        scaleTitle:SetText("Window Scale: " .. math.floor((db.scale or 1) * 100 + 0.5) .. "%")
+        scaleTitle:SetText(string.format(L.WINDOW_SCALE, math.floor((db.scale or 1) * 100 + 0.5)))
         maxSlider:SetValue(db.maxItems or 4)
-        maxTitle:SetText("Max Visible Items: " .. (db.maxItems or 4))
+        maxTitle:SetText(string.format(L.MAX_ITEMS, db.maxItems or 4))
         combatCheck:SetChecked(db.hideInCombat and true or false)
         minimapCheck:SetChecked(db.showMinimapButton and true or false)
+        groupChatCheck:SetChecked(db.groupRollChat and true or false)
+        chatBtnCheck:SetChecked(db.chatRollButton and true or false)
     end
 
     frame:Hide()
@@ -1431,6 +3092,9 @@ local function PrintHelp()
     Print("commands:")
     print("  /rollmove - unlock or lock the loot roll anchor")
     print("  /rollmove config - open the settings window")
+    print("  /rollmove history - open the roll history & details ledger")
+    print("  /rollmove chatgroup - toggle grouping roll spam in chat")
+    print("  /rollmove chatbtn - toggle clickable [Rolls] button in chat")
     print("  /rollmove scale <0.5-2> - set the window scale")
     print("  /rollmove max <1-10> - set max visible simultaneous rolls")
     print("  /rollmove combat - toggle hide in combat")
@@ -1482,6 +3146,20 @@ SlashCmdList.ROLLWINDOWMOVERFOREVER = function(input)
         end
     elseif command == "config" or command == "settings" or command == "menu" or command == "options" then
         ToggleSettings()
+    elseif command == "history" or command == "log" or command == "rolls" then
+        ToggleHistoryWindow()
+    elseif command == "chatgroup" then
+        db.groupRollChat = not db.groupRollChat
+        Print("group roll spam: " .. (db.groupRollChat and "|cff33ff99enabled|r" or "|cffff3333disabled|r"))
+        if settingsFrame and settingsFrame.Refresh then
+            settingsFrame:Refresh()
+        end
+    elseif command == "chatbtn" then
+        db.chatRollButton = not db.chatRollButton
+        Print("chat roll button: " .. (db.chatRollButton and "|cff33ff99enabled|r" or "|cffff3333disabled|r"))
+        if settingsFrame and settingsFrame.Refresh then
+            settingsFrame:Refresh()
+        end
     elseif command == "unlock" then
         Unlock()
     elseif command == "lock" then
@@ -1532,6 +3210,7 @@ local function InstallOpenNewFrameHook()
         origOpenNewFrame = GroupLootFrame_OpenNewFrame
         GroupLootFrame_OpenNewFrame = function(rollID, rollTime)
             if not IsTestRoll(rollID) and db then
+                RecordStartLootRoll(rollID)
                 local maxAllowed = db.maxItems or 4
                 if #ActiveRollFrames() >= maxAllowed then
                     if not IsRollQueued(rollID) then
@@ -1553,20 +3232,56 @@ local function InstallOpenNewFrameHook()
             return result
         end
     end
+    if not rollOnLootHooked and type(RollOnLoot) == "function" and hooksecurefunc then
+        rollOnLootHooked = true
+        hooksecurefunc("RollOnLoot", function(rollID, rollType)
+            if not rollID or IsTestRoll(rollID) then
+                return
+            end
+            local typeMap = { [0] = "pass", [1] = "need", [2] = "greed", [3] = "de", [4] = "transmog" }
+            local choice = typeMap[rollType]
+            if choice then
+                for _, e in ipairs(activeRollEntries) do
+                    if e.rollID == rollID then
+                        RecordParticipant(e, PlayerSelfName(), choice, nil, true)
+                        RefreshHistoryUI()
+                        break
+                    end
+                end
+            end
+        end)
+    end
+end
+
+local function SafeRegisterEvent(frame, eventName)
+    if C_EventUtils and C_EventUtils.IsEventValid then
+        if C_EventUtils.IsEventValid(eventName) then
+            frame:RegisterEvent(eventName)
+        end
+    else
+        pcall(frame.RegisterEvent, frame, eventName)
+    end
 end
 
 events = CreateFrame("Frame")
 events:RegisterEvent("ADDON_LOADED")
+events:RegisterEvent("PLAYER_LOGIN")
 events:RegisterEvent("PLAYER_ENTERING_WORLD")
 events:RegisterEvent("START_LOOT_ROLL")
 events:RegisterEvent("PLAYER_REGEN_DISABLED")
 events:RegisterEvent("PLAYER_REGEN_ENABLED")
+SafeRegisterEvent(events, "LOOT_HISTORY_ROLL_CHANGED")
+SafeRegisterEvent(events, "LOOT_HISTORY_ROLL_COMPLETE")
+SafeRegisterEvent(events, "LOOT_HISTORY_UPDATE_DROP")
 events:SetScript("OnEvent", function(self, event, arg1, arg2)
     if event == "ADDON_LOADED" then
+        if arg1 == "Chattynator" and db then
+            InstallChatIntegrations()
+            return
+        end
         if arg1 ~= ADDON_NAME then
             return
         end
-        self:UnregisterEvent("ADDON_LOADED")
         RollWindowMoverForeverDB = RollWindowMoverForeverDB or {}
         db = RollWindowMoverForeverDB
         if type(db.scale) ~= "number" then
@@ -1584,6 +3299,26 @@ events:SetScript("OnEvent", function(self, event, arg1, arg2)
         if type(db.minimapPos) ~= "number" then
             db.minimapPos = 220
         end
+        if type(db.groupRollChat) ~= "boolean" then
+            db.groupRollChat = true
+        end
+        if type(db.chatRollButton) ~= "boolean" then
+            db.chatRollButton = true
+        end
+        if type(db.history) ~= "table" then
+            db.history = {}
+        end
+        if type(db.nextHistoryId) ~= "number" then
+            db.nextHistoryId = 1
+        end
+        for _, entry in ipairs(db.history) do
+            if type(entry) == "table" and entry.id then
+                historyById[entry.id] = entry
+                if entry.id >= db.nextHistoryId then
+                    db.nextHistoryId = entry.id + 1
+                end
+            end
+        end
 
         EnsureGroupLootFrames(10)
         mover = CreateMover()
@@ -1592,20 +3327,22 @@ events:SetScript("OnEvent", function(self, event, arg1, arg2)
         minimapBtn = CreateMinimapButton()
         UpdateMinimapButtonPosition()
         settingsFrame = CreateSettingsUI()
+        historyFrame = CreateHistoryUI()
 
         InstallOpenNewFrameHook()
+        InstallChatIntegrations()
 
         for i = 1, 10 do
             HookFrameLifecycle(_G["GroupLootFrame" .. i])
         end
-    elseif event == "PLAYER_ENTERING_WORLD" then
+    elseif event == "PLAYER_LOGIN" or event == "PLAYER_ENTERING_WORLD" then
         InstallOpenNewFrameHook()
+        InstallChatIntegrations()
     elseif event == "PLAYER_REGEN_DISABLED" then
         if db and db.hideInCombat then
             combatHidden = true
             for _, frame in ipairs(AllGroupLootFrames()) do
-                frame:SetAlpha(0)
-                frame:EnableMouse(false)
+                ApplyCombatVisibility(frame)
             end
             if _G.GroupLootContainer then
                 _G.GroupLootContainer:SetAlpha(0)
@@ -1615,8 +3352,7 @@ events:SetScript("OnEvent", function(self, event, arg1, arg2)
         if combatHidden then
             combatHidden = false
             for _, frame in ipairs(AllGroupLootFrames()) do
-                frame:SetAlpha(1)
-                frame:EnableMouse(true)
+                ApplyCombatVisibility(frame)
             end
             if _G.GroupLootContainer then
                 _G.GroupLootContainer:SetAlpha(1)
@@ -1625,16 +3361,24 @@ events:SetScript("OnEvent", function(self, event, arg1, arg2)
     elseif event == "START_LOOT_ROLL" then
         local rollID = arg1
         local rollTime = arg2
-        if rollID and not IsTestRoll(rollID) and not FindRollFrameByRollID(rollID) then
-            local maxAllowed = (db and db.maxItems) or 4
-            if #ActiveRollFrames() >= maxAllowed then
-                if not IsRollQueued(rollID) then
-                    table.insert(rollQueue, { rollID = rollID, rollTime = rollTime, isReal = true })
+        if rollID and not IsTestRoll(rollID) then
+            RecordStartLootRoll(rollID)
+            if not FindRollFrameByRollID(rollID) then
+                local maxAllowed = (db and db.maxItems) or 4
+                if #ActiveRollFrames() >= maxAllowed then
+                    if not IsRollQueued(rollID) then
+                        table.insert(rollQueue, { rollID = rollID, rollTime = rollTime, isReal = true })
+                    end
+                elseif not origOpenNewFrame then
+                    OpenRealRollInFallbackFrame(rollID, rollTime)
                 end
-            elseif not origOpenNewFrame then
-                OpenRealRollInFallbackFrame(rollID, rollTime)
             end
         end
+    elseif event == "LOOT_HISTORY_ROLL_CHANGED" or event == "LOOT_HISTORY_ROLL_COMPLETE" then
+        SyncAllLootHistory()
+    elseif event == "LOOT_HISTORY_UPDATE_DROP" then
+        SyncDropFromLootHistory(arg1, arg2)
+        SyncAllLootHistory()
     end
     if db then
         ApplyAll()

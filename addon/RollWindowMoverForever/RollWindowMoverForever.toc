@@ -1,8 +1,10 @@
 ## Interface: 16001, 11509
 ## Title: Roll Window Mover Forever
-## Notes: Move and resize the Need / Greed / Pass loot roll window. Type /rollmove
+## Title-ruRU: Перемещение окна добычи (Roll Window Mover)
+## Notes: Move/resize the loot roll window, group roll spam in chat, and view who rolled what. Type /rollmove
+## Notes-ruRU: Перемещение и масштаб окна добычи, группировка роллов в чате и сводка «кто сколько выбросил». /rollmove
 ## Author: introqtua
-## Version: 1.2.2
+## Version: 1.3.0
 ## SavedVariables: RollWindowMoverForeverDB
 ## X-License: GPL-3.0
 

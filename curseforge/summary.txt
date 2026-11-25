@@ -1,0 +1,1 @@
+Move and resize up to 10 Need / Greed / Pass loot roll windows, collapse roll chat spam into one expandable line, and track who rolled what in a Roll History ledger. Made for WoW Forever.
