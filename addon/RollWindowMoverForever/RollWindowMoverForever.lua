@@ -124,17 +124,267 @@ local function IsTestRoll(rollID)
     return num ~= nil and testItemsByRollID[num] ~= nil
 end
 
+local HookFrameLifecycle
+
+local function AddSlotBorder(slotFrame, r, g, b, a)
+    local top = slotFrame:CreateTexture(nil, "BORDER")
+    top:SetPoint("TOPLEFT")
+    top:SetPoint("TOPRIGHT")
+    top:SetHeight(1)
+    top:SetColorTexture(r, g, b, a)
+
+    local bottom = slotFrame:CreateTexture(nil, "BORDER")
+    bottom:SetPoint("BOTTOMLEFT")
+    bottom:SetPoint("BOTTOMRIGHT")
+    bottom:SetHeight(1)
+    bottom:SetColorTexture(r, g, b, a)
+
+    local left = slotFrame:CreateTexture(nil, "BORDER")
+    left:SetPoint("TOPLEFT")
+    left:SetPoint("BOTTOMLEFT")
+    left:SetWidth(1)
+    left:SetColorTexture(r, g, b, a)
+
+    local right = slotFrame:CreateTexture(nil, "BORDER")
+    right:SetPoint("TOPRIGHT")
+    right:SetPoint("BOTTOMRIGHT")
+    right:SetWidth(1)
+    right:SetColorTexture(r, g, b, a)
+
+    slotFrame.borders = { top, bottom, left, right }
+end
+
+local function SetSlotBorderColor(slotFrame, r, g, b, a)
+    if slotFrame and slotFrame.borders then
+        for _, tex in ipairs(slotFrame.borders) do
+            tex:SetColorTexture(r, g, b, a or 1)
+        end
+    end
+end
+
+local function SetButtonEnabled(btn, enabled)
+    if enabled then
+        btn:Enable()
+        btn:SetAlpha(1)
+    else
+        btn:Disable()
+        btn:SetAlpha(0.35)
+    end
+end
+
+local function CreateFallbackGroupLootFrame(name, id)
+    local ref = _G.GroupLootFrame1
+    local w, h = 243, 84
+    if ref and ref.GetSize then
+        local rw, rh = ref:GetSize()
+        if rw and rw > 50 and rh and rh > 30 then
+            w, h = rw, rh
+        end
+    end
+
+    local frame = CreateFrame("Frame", name, UIParent)
+    frame:SetID(id)
+    frame:SetSize(w, h)
+    frame:SetFrameStrata((ref and ref.GetFrameStrata and ref:GetFrameStrata()) or "DIALOG")
+    frame:SetToplevel(true)
+    frame:EnableMouse(true)
+    frame.isFallbackRollFrame = true
+
+    local bg = frame:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints()
+    bg:SetColorTexture(0.06, 0.07, 0.09, 0.92)
+    AddSlotBorder(frame, 0.5, 0.5, 0.5, 1)
+
+    local iconFrame = CreateFrame("Button", name .. "IconFrame", frame)
+    iconFrame:SetSize(36, 36)
+    iconFrame:SetPoint("LEFT", frame, "LEFT", 10, 4)
+    local iconTex = iconFrame:CreateTexture(nil, "ARTWORK")
+    iconTex:SetAllPoints()
+    iconFrame.Icon = iconTex
+    frame.IconFrame = iconFrame
+
+    iconFrame:SetScript("OnEnter", function(self)
+        local rollID = frame.rollID
+        if not rollID then
+            return
+        end
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        if IsTestRoll(rollID) then
+            local item = testItemsByRollID[tonumber(rollID)]
+            local link = item and item.resolvedLink
+            if link then
+                GameTooltip:SetHyperlink(link)
+            end
+        elseif GameTooltip.SetLootRollItem then
+            pcall(GameTooltip.SetLootRollItem, GameTooltip, rollID)
+        end
+        GameTooltip:Show()
+    end)
+    iconFrame:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+    end)
+
+    local function MakeRollButton(suffix, size, normalTex, pushTex, highlightTex, rollType, label)
+        local btn = CreateFrame("Button", name .. suffix, frame)
+        btn:SetSize(size, size)
+        btn:SetNormalTexture(normalTex)
+        btn:SetPushedTexture(pushTex)
+        btn:SetHighlightTexture(highlightTex, "ADD")
+        btn.rollType = rollType
+        btn:SetScript("OnClick", function()
+            if RollOnLoot and frame.rollID then
+                RollOnLoot(frame.rollID, rollType)
+            end
+        end)
+        btn:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetText(label)
+            GameTooltip:Show()
+        end)
+        btn:SetScript("OnLeave", function()
+            GameTooltip:Hide()
+        end)
+        return btn
+    end
+
+    local passBtn = MakeRollButton(
+        "PassButton",
+        24,
+        "Interface\\Buttons\\UI-GroupLoot-Pass-Up",
+        "Interface\\Buttons\\UI-GroupLoot-Pass-Down",
+        "Interface\\Buttons\\UI-GroupLoot-Pass-Highlight",
+        0,
+        PASS or "Pass"
+    )
+    passBtn:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -8, -8)
+
+    local needBtn = MakeRollButton(
+        "NeedButton",
+        28,
+        "Interface\\Buttons\\UI-GroupLoot-Dice-Up",
+        "Interface\\Buttons\\UI-GroupLoot-Dice-Down",
+        "Interface\\Buttons\\UI-GroupLoot-Dice-Highlight",
+        1,
+        NEED or "Need"
+    )
+    needBtn:SetPoint("RIGHT", passBtn, "LEFT", -2, 0)
+
+    local greedBtn = MakeRollButton(
+        "GreedButton",
+        28,
+        "Interface\\Buttons\\UI-GroupLoot-Coin-Up",
+        "Interface\\Buttons\\UI-GroupLoot-Coin-Down",
+        "Interface\\Buttons\\UI-GroupLoot-Coin-Highlight",
+        2,
+        GREED or "Greed"
+    )
+    greedBtn:SetPoint("TOP", needBtn, "BOTTOM", 0, 2)
+
+    local deBtn = MakeRollButton(
+        "DisenchantButton",
+        28,
+        "Interface\\Buttons\\UI-GroupLoot-DE-Up",
+        "Interface\\Buttons\\UI-GroupLoot-DE-Down",
+        "Interface\\Buttons\\UI-GroupLoot-DE-Highlight",
+        3,
+        ROLL_DISENCHANT or "Disenchant"
+    )
+    deBtn:SetPoint("TOP", passBtn, "BOTTOM", 0, 2)
+
+    frame.PassButton = passBtn
+    frame.NeedButton = needBtn
+    frame.GreedButton = greedBtn
+    frame.DisenchantButton = deBtn
+
+    local nameText = frame:CreateFontString(name .. "Name", "ARTWORK", "GameFontNormalSmall")
+    nameText:SetPoint("LEFT", iconFrame, "RIGHT", 8, 2)
+    nameText:SetPoint("RIGHT", needBtn, "LEFT", -6, 2)
+    nameText:SetJustifyH("LEFT")
+    nameText:SetWordWrap(true)
+    frame.Name = nameText
+
+    local timer = CreateFrame("StatusBar", name .. "Timer", frame)
+    timer:SetHeight(7)
+    timer:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 10, 6)
+    timer:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -10, 6)
+    timer:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
+    timer:SetStatusBarColor(1, 0.85, 0)
+    local timerBg = timer:CreateTexture(nil, "BACKGROUND")
+    timerBg:SetAllPoints()
+    timerBg:SetColorTexture(0.15, 0.15, 0.15, 0.8)
+    frame.Timer = timer
+
+    frame:SetScript("OnShow", function(self)
+        local rollID = self.rollID
+        if not rollID or not GetLootRollItemInfo then
+            self:Hide()
+            return
+        end
+        local texture, itemName, _, quality, _, canNeed, canGreed, canDisenchant = GetLootRollItemInfo(rollID)
+        if not itemName then
+            self:Hide()
+            return
+        end
+        iconTex:SetTexture(texture)
+        nameText:SetText(itemName)
+        local r, g, b = 1, 1, 1
+        if GetItemQualityColor and quality then
+            r, g, b = GetItemQualityColor(quality)
+        elseif ITEM_QUALITY_COLORS and quality and ITEM_QUALITY_COLORS[quality] then
+            local c = ITEM_QUALITY_COLORS[quality]
+            r, g, b = c.r, c.g, c.b
+        end
+        nameText:SetTextColor(r, g, b)
+        SetSlotBorderColor(self, r, g, b, 1)
+        SetButtonEnabled(needBtn, canNeed ~= false)
+        SetButtonEnabled(greedBtn, canGreed ~= false)
+        if canDisenchant then
+            deBtn:Show()
+            SetButtonEnabled(deBtn, true)
+        else
+            deBtn:Hide()
+        end
+        local total = self.rollTime or TEST_ROLL_TIME
+        local left = (GetLootRollTimeLeft and GetLootRollTimeLeft(rollID)) or total
+        if left > total then
+            total = left
+        end
+        timer:SetMinMaxValues(0, math.max(1, total))
+        timer:SetValue(math.max(0, left))
+    end)
+
+    frame:SetScript("OnUpdate", function(self)
+        if self.rollID and GetLootRollTimeLeft then
+            timer:SetValue(math.max(0, GetLootRollTimeLeft(self.rollID) or 0))
+        end
+    end)
+
+    frame:RegisterEvent("CANCEL_LOOT_ROLL")
+    frame:SetScript("OnEvent", function(self, event, rollID)
+        if event == "CANCEL_LOOT_ROLL" and rollID == self.rollID then
+            self:Hide()
+        end
+    end)
+
+    frame:Hide()
+    return frame
+end
+
 local function EnsureGroupLootFrames(count)
     local targetCount = math.max(4, math.min(10, count or (db and db.maxItems) or 10))
+    local objType = (_G.GroupLootFrame1 and _G.GroupLootFrame1.GetObjectType and _G.GroupLootFrame1:GetObjectType()) or "Frame"
     for i = 5, targetCount do
         local name = "GroupLootFrame" .. i
         if not _G[name] then
-            pcall(function()
-                local f = CreateFrame("Frame", name, UIParent, "GroupLootFrameTemplate")
-                if f then
-                    f:SetID(i)
-                end
-            end)
+            local ok, f = pcall(CreateFrame, objType, name, UIParent, "GroupLootFrameTemplate")
+            if ok and f then
+                f:SetID(i)
+            else
+                CreateFallbackGroupLootFrame(name, i)
+            end
+        end
+        if _G[name] and HookFrameLifecycle then
+            HookFrameLifecycle(_G[name])
         end
     end
     if type(NUM_GROUP_LOOT_FRAMES) == "number" and NUM_GROUP_LOOT_FRAMES < targetCount then
@@ -179,20 +429,55 @@ local function Hook(frame)
     end)
 end
 
+local function IsDescendantOf(frame, ancestor)
+    local current = frame and frame.GetParent and frame:GetParent()
+    while current do
+        if current == ancestor then
+            return true
+        end
+        current = current.GetParent and current:GetParent()
+    end
+    return false
+end
+
+local function AllGroupLootFrames()
+    local list = {}
+    local index = 1
+    local frame = _G.GroupLootFrame1
+    while frame do
+        list[#list + 1] = frame
+        index = index + 1
+        frame = _G["GroupLootFrame" .. index]
+    end
+    local container = _G.GroupLootContainer
+    if container and type(container.rollFrames) == "table" then
+        for _, rollFrame in pairs(container.rollFrames) do
+            if type(rollFrame) == "table" and not Contains(list, rollFrame) then
+                list[#list + 1] = rollFrame
+            end
+        end
+    end
+    return list
+end
+
+local function ApplyFrameScale(frame, scale)
+    local container = _G.GroupLootContainer
+    if container and frame ~= container and IsDescendantOf(frame, container) then
+        frame:SetScale(1)
+    else
+        frame:SetScale(scale)
+    end
+end
+
 local function ApplyAll()
+    local scale = (db and db.scale) or 1
     for _, frame in ipairs(Targets()) do
         Hook(frame)
-        frame:SetScale(db.scale)
+        frame:SetScale(scale)
         Anchor(frame)
     end
-    if not _G.GroupLootContainer then
-        local index = 2
-        local frame = _G["GroupLootFrame" .. index]
-        while frame do
-            frame:SetScale(db.scale)
-            index = index + 1
-            frame = _G["GroupLootFrame" .. index]
-        end
+    for _, frame in ipairs(AllGroupLootFrames()) do
+        ApplyFrameScale(frame, scale)
     end
 end
 
@@ -287,26 +572,6 @@ local function Lock()
     end
 end
 
-local function AllGroupLootFrames()
-    local list = {}
-    local index = 1
-    local frame = _G.GroupLootFrame1
-    while frame do
-        list[#list + 1] = frame
-        index = index + 1
-        frame = _G["GroupLootFrame" .. index]
-    end
-    local container = _G.GroupLootContainer
-    if container and type(container.rollFrames) == "table" then
-        for _, rollFrame in pairs(container.rollFrames) do
-            if type(rollFrame) == "table" and not Contains(list, rollFrame) then
-                list[#list + 1] = rollFrame
-            end
-        end
-    end
-    return list
-end
-
 local function TestFrames()
     local list = {}
     for _, frame in ipairs(AllGroupLootFrames()) do
@@ -345,7 +610,7 @@ local function UpdateTestStackLayout()
         else
             frame:SetPoint("BOTTOM", prev, "TOP", 0, spacing)
         end
-        frame:SetScale(db.scale or 1)
+        ApplyFrameScale(frame, db.scale or 1)
         prev = frame
     end
     applying = false
@@ -430,12 +695,8 @@ local function Reset()
             applying = false
         end
     end
-    local index = 2
-    local frame = _G["GroupLootFrame" .. index]
-    while frame do
+    for _, frame in ipairs(AllGroupLootFrames()) do
         frame:SetScale(1)
-        index = index + 1
-        frame = _G["GroupLootFrame" .. index]
     end
     if minimapBtn then
         minimapBtn:Show()
@@ -517,7 +778,101 @@ end
 
 local origOpenNewFrame
 
-local function CheckRollQueue()
+local function ContainerHasFrame(container, frame)
+    if not container or type(container.rollFrames) ~= "table" then
+        return false
+    end
+    for _, existing in pairs(container.rollFrames) do
+        if existing == frame then
+            return true
+        end
+    end
+    return false
+end
+
+local function FindRollFrameByRollID(rollID)
+    for _, frame in ipairs(AllGroupLootFrames()) do
+        if frame.IsShown and frame:IsShown() and frame.rollID == rollID then
+            return frame
+        end
+    end
+    return nil
+end
+
+local function OpenRealRollInFallbackFrame(rollID, rollTime)
+    local maxAllowed = (db and db.maxItems) or 4
+    EnsureGroupLootFrames(maxAllowed)
+    for i = 1, maxAllowed do
+        local frame = _G["GroupLootFrame" .. i]
+        if frame and not frame:IsShown() then
+            frame.rollID = rollID
+            frame.rollTime = rollTime
+            local okShow = pcall(frame.Show, frame)
+            if (not okShow or not frame:IsShown()) and i >= 5 and not frame.isFallbackRollFrame then
+                frame:Hide()
+                local fallback = CreateFallbackGroupLootFrame("GroupLootFrame" .. i .. "_Fallback", i)
+                _G["GroupLootFrame" .. i] = fallback
+                if HookFrameLifecycle then
+                    HookFrameLifecycle(fallback)
+                end
+                fallback.rollID = rollID
+                fallback.rollTime = rollTime
+                fallback:Show()
+                frame = fallback
+            end
+            if frame:IsShown() then
+                local container = _G.GroupLootContainer
+                if container and type(GroupLootContainer_AddFrame) == "function" and not ContainerHasFrame(container, frame) then
+                    pcall(GroupLootContainer_AddFrame, container, frame)
+                end
+                return frame
+            end
+        end
+    end
+    return nil
+end
+
+local CheckRollQueue
+
+local function HookTestFrame(frame)
+    HookTestButtons(frame)
+    if not hooked["drag" .. tostring(frame)] then
+        hooked["drag" .. tostring(frame)] = true
+        frame:EnableMouseWheel(true)
+        frame:RegisterForDrag("LeftButton")
+        frame:HookScript("OnDragStart", function()
+            if mover and mover:IsShown() then
+                mover:StartMoving()
+            end
+        end)
+        frame:HookScript("OnDragStop", function()
+            if mover and mover:IsShown() then
+                mover:StopMovingOrSizing()
+                SavePosition()
+                UpdateTestStackLayout()
+            end
+        end)
+        frame:HookScript("OnMouseWheel", function(_, delta)
+            SetScale(db.scale + delta * SCALE_STEP)
+            UpdateTestStackLayout()
+        end)
+    end
+    if not hooked["test" .. tostring(frame)] then
+        hooked["test" .. tostring(frame)] = true
+        frame:HookScript("OnHide", function()
+            if stoppingTest or not testActive then
+                return
+            end
+            CheckRollQueue()
+            UpdateTestStackLayout()
+            if #TestFrames() == 0 and #rollQueue == 0 then
+                StopTest()
+            end
+        end)
+    end
+end
+
+CheckRollQueue = function()
     local maxAllowed = (db and db.maxItems) or 4
     if testActive then
         while #rollQueue > 0 and #TestFrames() < maxAllowed do
@@ -527,7 +882,7 @@ local function CheckRollQueue()
                 if frame and not frame:IsShown() then
                     frame.rollID = nextRoll.rollID
                     frame.rollTime = nextRoll.rollTime
-                    HookTestButtons(frame)
+                    HookTestFrame(frame)
                     frame:Show()
                     break
                 end
@@ -537,11 +892,37 @@ local function CheckRollQueue()
     else
         while #rollQueue > 0 and #ActiveRollFrames() < maxAllowed do
             local nextRoll = table.remove(rollQueue, 1)
-            if nextRoll.isReal and origOpenNewFrame then
-                origOpenNewFrame(nextRoll.rollID, nextRoll.rollTime)
+            if nextRoll.isReal then
+                if origOpenNewFrame then
+                    origOpenNewFrame(nextRoll.rollID, nextRoll.rollTime)
+                end
+                if not FindRollFrameByRollID(nextRoll.rollID) and #ActiveRollFrames() < maxAllowed then
+                    OpenRealRollInFallbackFrame(nextRoll.rollID, nextRoll.rollTime)
+                end
             end
         end
     end
+end
+
+HookFrameLifecycle = function(frame)
+    if not frame or type(frame.HookScript) ~= "function" or hooked["lifecycle" .. tostring(frame)] then
+        return
+    end
+    hooked["lifecycle" .. tostring(frame)] = true
+    frame:HookScript("OnShow", function(self)
+        if db then
+            ApplyFrameScale(self, db.scale or 1)
+        end
+    end)
+    frame:HookScript("OnHide", function(self)
+        if not testActive and not stoppingTest then
+            local container = _G.GroupLootContainer
+            if container and type(GroupLootContainer_RemoveFrame) == "function" and ContainerHasFrame(container, self) then
+                pcall(GroupLootContainer_RemoveFrame, container, self)
+            end
+            CheckRollQueue()
+        end
+    end)
 end
 
 function DismissTestRoll(rollID, rollType)
@@ -656,8 +1037,18 @@ local function StartTest(count)
         if frame then
             frame.rollID = testItem.rollID
             frame.rollTime = TEST_ROLL_TIME
-            HookTestButtons(frame)
-            frame:Show()
+            HookTestFrame(frame)
+            local okShow = pcall(frame.Show, frame)
+            if (not okShow or not frame:IsShown()) and i >= 5 and not frame.isFallbackRollFrame then
+                frame:Hide()
+                local fallback = CreateFallbackGroupLootFrame("GroupLootFrame" .. i .. "_Fallback", i)
+                _G["GroupLootFrame" .. i] = fallback
+                HookFrameLifecycle(fallback)
+                fallback.rollID = testItem.rollID
+                fallback.rollTime = TEST_ROLL_TIME
+                HookTestFrame(fallback)
+                fallback:Show()
+            end
         end
     end
 
@@ -675,71 +1066,11 @@ local function StartTest(count)
     end
 
     for _, frame in ipairs(frames) do
-        HookTestButtons(frame)
-        if not hooked["drag" .. tostring(frame)] then
-            hooked["drag" .. tostring(frame)] = true
-            frame:EnableMouseWheel(true)
-            frame:RegisterForDrag("LeftButton")
-            frame:HookScript("OnDragStart", function(self)
-                if mover and mover:IsShown() then
-                    mover:StartMoving()
-                end
-            end)
-            frame:HookScript("OnDragStop", function(self)
-                if mover and mover:IsShown() then
-                    mover:StopMovingOrSizing()
-                    SavePosition()
-                    UpdateTestStackLayout()
-                end
-            end)
-            frame:HookScript("OnMouseWheel", function(self, delta)
-                SetScale(db.scale + delta * SCALE_STEP)
-                UpdateTestStackLayout()
-            end)
-        end
-        if not hooked["test" .. tostring(frame)] then
-            hooked["test" .. tostring(frame)] = true
-            frame:HookScript("OnHide", function()
-                if stoppingTest or not testActive then
-                    return
-                end
-                CheckRollQueue()
-                UpdateTestStackLayout()
-                if #TestFrames() == 0 and #rollQueue == 0 then
-                    StopTest()
-                end
-            end)
-        end
+        HookTestFrame(frame)
     end
 
     local queuedNotice = (#rollQueue > 0) and (" (" .. #rollQueue .. " in queue)") or ""
     Print("showing " .. #frames .. " test roll window(s)" .. queuedNotice .. ". Click Need/Greed/Pass to test, or /rollmove test to hide.")
-end
-
-local function AddSlotBorder(slotFrame, r, g, b, a)
-    local top = slotFrame:CreateTexture(nil, "BORDER")
-    top:SetPoint("TOPLEFT")
-    top:SetPoint("TOPRIGHT")
-    top:SetHeight(1)
-    top:SetColorTexture(r, g, b, a)
-
-    local bottom = slotFrame:CreateTexture(nil, "BORDER")
-    bottom:SetPoint("BOTTOMLEFT")
-    bottom:SetPoint("BOTTOMRIGHT")
-    bottom:SetHeight(1)
-    bottom:SetColorTexture(r, g, b, a)
-
-    local left = slotFrame:CreateTexture(nil, "BORDER")
-    left:SetPoint("TOPLEFT")
-    left:SetPoint("BOTTOMLEFT")
-    left:SetWidth(1)
-    left:SetColorTexture(r, g, b, a)
-
-    local right = slotFrame:CreateTexture(nil, "BORDER")
-    right:SetPoint("TOPRIGHT")
-    right:SetPoint("BOTTOMRIGHT")
-    right:SetWidth(1)
-    right:SetColorTexture(r, g, b, a)
 end
 
 local function CreateMover()
@@ -1080,7 +1411,7 @@ local function CreateSettingsUI()
 
     local authorInfo = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     authorInfo:SetPoint("BOTTOM", frame, "BOTTOM", 0, 14)
-    authorInfo:SetText("Roll Window Mover Forever v1.2.1 | Type /rollmove help")
+    authorInfo:SetText("Roll Window Mover Forever v1.2.2 | Type /rollmove help")
 
     function frame:Refresh()
         lockBtn:SetText(mover:IsShown() and "Lock Anchor" or "Unlock Anchor")
@@ -1187,6 +1518,43 @@ SlashCmdList.ROLLWINDOWMOVERFOREVER = function(input)
     end
 end
 
+local function IsRollQueued(rollID)
+    for _, entry in ipairs(rollQueue) do
+        if entry.rollID == rollID then
+            return true
+        end
+    end
+    return false
+end
+
+local function InstallOpenNewFrameHook()
+    if type(GroupLootFrame_OpenNewFrame) == "function" and not origOpenNewFrame then
+        origOpenNewFrame = GroupLootFrame_OpenNewFrame
+        GroupLootFrame_OpenNewFrame = function(rollID, rollTime)
+            if not IsTestRoll(rollID) and db then
+                local maxAllowed = db.maxItems or 4
+                if #ActiveRollFrames() >= maxAllowed then
+                    if not IsRollQueued(rollID) then
+                        table.insert(rollQueue, { rollID = rollID, rollTime = rollTime, isReal = true })
+                    end
+                    return
+                end
+            end
+            local result = origOpenNewFrame(rollID, rollTime)
+            if not IsTestRoll(rollID) and db and not FindRollFrameByRollID(rollID) then
+                local maxAllowed = db.maxItems or 4
+                if #ActiveRollFrames() < maxAllowed then
+                    OpenRealRollInFallbackFrame(rollID, rollTime)
+                end
+            end
+            if db then
+                ApplyAll()
+            end
+            return result
+        end
+    end
+end
+
 events = CreateFrame("Frame")
 events:RegisterEvent("ADDON_LOADED")
 events:RegisterEvent("PLAYER_ENTERING_WORLD")
@@ -1225,31 +1593,13 @@ events:SetScript("OnEvent", function(self, event, arg1, arg2)
         UpdateMinimapButtonPosition()
         settingsFrame = CreateSettingsUI()
 
-        if type(GroupLootFrame_OpenNewFrame) == "function" and not origOpenNewFrame then
-            origOpenNewFrame = GroupLootFrame_OpenNewFrame
-            GroupLootFrame_OpenNewFrame = function(rollID, rollTime)
-                if not IsTestRoll(rollID) and db then
-                    local maxAllowed = db.maxItems or 4
-                    if #ActiveRollFrames() >= maxAllowed then
-                        table.insert(rollQueue, { rollID = rollID, rollTime = rollTime, isReal = true })
-                        return
-                    end
-                end
-                return origOpenNewFrame(rollID, rollTime)
-            end
-        end
+        InstallOpenNewFrameHook()
 
         for i = 1, 10 do
-            local f = _G["GroupLootFrame" .. i]
-            if f and type(f.HookScript) == "function" and not hooked["realhide" .. i] then
-                hooked["realhide" .. i] = true
-                f:HookScript("OnHide", function()
-                    if not testActive and not stoppingTest then
-                        CheckRollQueue()
-                    end
-                end)
-            end
+            HookFrameLifecycle(_G["GroupLootFrame" .. i])
         end
+    elseif event == "PLAYER_ENTERING_WORLD" then
+        InstallOpenNewFrameHook()
     elseif event == "PLAYER_REGEN_DISABLED" then
         if db and db.hideInCombat then
             combatHidden = true
@@ -1275,10 +1625,14 @@ events:SetScript("OnEvent", function(self, event, arg1, arg2)
     elseif event == "START_LOOT_ROLL" then
         local rollID = arg1
         local rollTime = arg2
-        if rollID and not IsTestRoll(rollID) then
+        if rollID and not IsTestRoll(rollID) and not FindRollFrameByRollID(rollID) then
             local maxAllowed = (db and db.maxItems) or 4
             if #ActiveRollFrames() >= maxAllowed then
-                table.insert(rollQueue, { rollID = rollID, rollTime = rollTime })
+                if not IsRollQueued(rollID) then
+                    table.insert(rollQueue, { rollID = rollID, rollTime = rollTime, isReal = true })
+                end
+            elseif not origOpenNewFrame then
+                OpenRealRollInFallbackFrame(rollID, rollTime)
             end
         end
     end
