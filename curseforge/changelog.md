@@ -1,3 +1,9 @@
+## 1.3.2
+
+- Fixed delayed `CHAT_MSG_LOOT` filter registration (`CreateSecureFiltersArray` startup race on `16001` clients) with automatic `C_Timer.After` retries.
+- Fixed WoW Forever two-word character names (`First Surname`) causing duplicate player entries or missing class colors in chat and Roll History.
+- Added suppression/binding for bare `|HlootHistory:...|h[Loot]|h: [Item]` roll-start announcements and `/rollmove debug` diagnostics.
+
 ## 1.3.1
 
 - Fixed `CHAT_MSG_LOOT` filter registration on `16001` clients using `ChatFrameUtil.AddMessageEventFilter` (real group loot rolls were bypassing the chat grouping filter).

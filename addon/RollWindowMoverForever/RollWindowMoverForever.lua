@@ -56,8 +56,8 @@ local L = {
         or "unlocked. Drag any box, scroll to resize, right-click or /rollmove lock to save.",
     LOCKED_MSG = isRu and "закреплено. Позиция сохранена." or "locked. Position saved.",
     RESET_MSG = isRu and "позиция и настройки сброшены по умолчанию." or "reset to the default Blizzard position and settings.",
-    VERSION_FOOTER = isRu and "Roll Window Mover Forever v1.3.1 | /rollmove help"
-        or "Roll Window Mover Forever v1.3.1 | Type /rollmove help",
+    VERSION_FOOTER = isRu and "Roll Window Mover Forever v1.3.2 | /rollmove help"
+        or "Roll Window Mover Forever v1.3.2 | Type /rollmove help",
 }
 
 local TITLE = L.TITLE
@@ -175,6 +175,13 @@ local chatFilterInstalled = false
 local chattynatorModifierInstalled = false
 local hyperlinkHookInstalled = false
 local rollOnLootHooked = false
+local filterRetryScheduled = false
+local filterRetryCount = 0
+local lastFilterError
+local filterCalls = 0
+local lastFilterRaw
+local lastFilterAction
+local lastMatchKind
 
 local function Print(message)
     print(TITLE .. ": " .. message)
@@ -182,6 +189,12 @@ end
 
 local function Plain(value)
     if issecretvalue and issecretvalue(value) then
+        if canaccessvalue then
+            local ok, acc = pcall(canaccessvalue, value)
+            if ok and acc then
+                return value
+            end
+        end
         return nil
     end
     return value
@@ -1256,10 +1269,50 @@ local function CreateMover()
     return frame
 end
 
+local function ForeverSurnameSeparator()
+    local c = Constants and Constants.CharacterNameSeparatorConsts
+    local sep = c and c.CHARACTERNAME_SURNAME_SEPARATOR
+    if type(sep) == "string" and sep ~= "" then
+        return sep
+    end
+    return " "
+end
+
+local function IsForeverClient()
+    if Constants and Constants.CharacterNameSeparatorConsts then
+        return true
+    end
+    if GetBuildInfo then
+        local ok, _, _, _, build = pcall(GetBuildInfo)
+        if ok and type(build) == "number" and build >= 16000 and build < 20000 then
+            return true
+        end
+    end
+    return false
+end
+
+local function UnitDisplayName(unit)
+    local ok, first, second = pcall(UnitName, unit)
+    if not ok then
+        return nil
+    end
+    first = Plain(first)
+    second = Plain(second)
+    if type(first) ~= "string" or first == "" then
+        return nil
+    end
+    if type(second) == "string" and second ~= "" and IsForeverClient() then
+        local sep = ForeverSurnameSeparator()
+        if not first:find(sep, 1, true) then
+            return first .. sep .. second
+        end
+    end
+    return first
+end
+
 local function PlayerSelfName()
-    local ok, name = pcall(UnitName, "player")
-    name = ok and Plain(name)
-    if type(name) == "string" and name ~= "" then
+    local name = UnitDisplayName("player")
+    if name then
         return name
     end
     return _G.YOU or "You"
@@ -1282,7 +1335,24 @@ local function IsSelfPlayer(name)
         return true
     end
     local me = PlayerSelfName():lower()
-    return low == me or ShortName(low) == ShortName(me)
+    if low == me or ShortName(low) == ShortName(me) then
+        return true
+    end
+    local ok, first = pcall(UnitName, "player")
+    first = ok and Plain(first)
+    if type(first) == "string" and first ~= "" then
+        local fLow = first:lower()
+        if low == fLow then
+            return true
+        end
+        if IsForeverClient() then
+            local sep = ForeverSurnameSeparator():lower()
+            if low:sub(1, #fLow + #sep) == fLow .. sep then
+                return true
+            end
+        end
+    end
+    return false
 end
 
 local function LookupPlayerClass(name)
@@ -1293,14 +1363,25 @@ local function LookupPlayerClass(name)
         local ok, _, cls = pcall(UnitClass, "player")
         return ok and Plain(cls) or nil
     end
+    local lowTarget = name:lower()
     local shortTarget = ShortName(name):lower()
+    local function UnitMatches(unit)
+        local full = UnitDisplayName(unit)
+        if type(full) == "string" and (full:lower() == lowTarget or ShortName(full):lower() == shortTarget) then
+            return true
+        end
+        local okN, first = pcall(UnitName, unit)
+        first = okN and Plain(first)
+        if type(first) == "string" and (first:lower() == lowTarget or ShortName(first):lower() == shortTarget) then
+            return true
+        end
+        return false
+    end
     local numRaid = GetNumGroupMembers and GetNumGroupMembers() or 0
     if IsInRaid and IsInRaid() and numRaid > 0 then
         for i = 1, numRaid do
             local unit = "raid" .. i
-            local okN, unitName = pcall(UnitName, unit)
-            unitName = okN and Plain(unitName)
-            if type(unitName) == "string" and (unitName:lower() == name:lower() or ShortName(unitName):lower() == shortTarget) then
+            if UnitMatches(unit) then
                 local okC, _, cls = pcall(UnitClass, unit)
                 return okC and Plain(cls) or nil
             end
@@ -1308,9 +1389,7 @@ local function LookupPlayerClass(name)
     elseif numRaid > 0 then
         for i = 1, 4 do
             local unit = "party" .. i
-            local okN, unitName = pcall(UnitName, unit)
-            unitName = okN and Plain(unitName)
-            if type(unitName) == "string" and (unitName:lower() == name:lower() or ShortName(unitName):lower() == shortTarget) then
+            if UnitMatches(unit) then
                 local okC, _, cls = pcall(UnitClass, unit)
                 return okC and Plain(cls) or nil
             end
@@ -1721,6 +1800,10 @@ local function SyncEntryFromLootHistory(entry)
                                     entry.winIsSelf = p.isSelf
                                     entry.winType = p.choice or entry.winType
                                     entry.winRoll = p.roll or entry.winRoll
+                                    if not entry.finished then
+                                        entry.finished = true
+                                        entry.finishedAt = entry.finishedAt or now
+                                    end
                                 end
                             end
                         end
@@ -1779,6 +1862,10 @@ local function SyncDropFromLootHistory(encounterID, lootListID)
                     targetEntry.winIsSelf = p.isSelf
                     targetEntry.winType = p.choice or targetEntry.winType
                     targetEntry.winRoll = p.roll or targetEntry.winRoll
+                    if not targetEntry.finished then
+                        targetEntry.finished = true
+                        targetEntry.finishedAt = targetEntry.finishedAt or time()
+                    end
                 end
             end
         end
@@ -1793,15 +1880,18 @@ local function StripLootHistoryTag(fmt)
     end
     local s, e = fmt:find("|c%x%x%x%x%x%x%x%x|HlootHistory:.-|h.-|h|r:?%s*")
     if not s then
+        s, e = fmt:find("|cn[^:]+:|HlootHistory:.-|h.-|h|r:?%s*")
+    end
+    if not s then
         s, e = fmt:find("|HlootHistory:.-|h.-|h|?r?:?%s*")
     end
     if not s then
         return fmt
     end
-    local tagPos = tonumber(fmt:sub(s, e):match("%%(%d)%$"))
+    local tagPos = tonumber(fmt:sub(s, e):match("%%(%d+)%$"))
     local rest = fmt:sub(1, s - 1) .. fmt:sub(e + 1)
     if tagPos then
-        rest = rest:gsub("%%(%d)%$", function(pos)
+        rest = rest:gsub("%%(%d+)%$", function(pos)
             pos = tonumber(pos)
             return "%" .. (pos > tagPos and pos - 1 or pos) .. "$"
         end)
@@ -1897,6 +1987,8 @@ local function GetRollPatterns()
         end
     end
 
+    add("LOOT_ROLL_YOU_WON_NO_SPAM_NEED_ROLE_BONUS", { kind = "outcome", choice = "need", isSelf = true })
+    add("LOOT_ROLL_WON_NO_SPAM_NEED_ROLE_BONUS", { kind = "outcome", choice = "need", isSelf = false })
     add("LOOT_ROLL_YOU_WON_NO_SPAM_NEED", { kind = "outcome", choice = "need", isSelf = true })
     add("LOOT_ROLL_WON_NO_SPAM_NEED", { kind = "outcome", choice = "need", isSelf = false })
     add("LOOT_ROLL_YOU_WON_NO_SPAM_GREED", { kind = "outcome", choice = "greed", isSelf = true })
@@ -1911,6 +2003,7 @@ local function GetRollPatterns()
     add("LOOT_ROLL_WON", { kind = "outcome", isSelf = false })
     add("LOOT_ROLL_ALL_PASSED", { kind = "allPassed" })
 
+    add("LOOT_ROLL_ROLLED_NEED_ROLE_BONUS_SELF", { kind = "roll", choice = "need", isSelf = true })
     add("LOOT_ROLL_ROLLED_NEED_ROLE_BONUS", { kind = "roll", choice = "need" })
     add("LOOT_ROLL_ROLLED_NEED", { kind = "roll", choice = "need" })
     add("LOOT_ROLL_ROLLED_GREED", { kind = "roll", choice = "greed" })
@@ -1978,6 +2071,9 @@ local function MatchLootRollLine(rawText)
         :gsub("|c%x%x%x%x%x%x%x%x|HlootHistory:[^|]*|h.-|h|r:?%s*", "")
         :gsub("|cn[^:]+:|HlootHistory:[^|]*|h.-|h|r:?%s*", "")
         :gsub("|HlootHistory:[^|]*|h.-|h|?r?:?%s*", "")
+    if not lootHistoryID then
+        cleanText = cleanText:gsub("^%[Loot%]:%s*", "")
+    end
     local masked, savedLinks = ProtectLinks(cleanText)
     for _, pat in ipairs(GetRollPatterns()) do
         local caps = { masked:match(pat.regex) }
@@ -1992,7 +2088,7 @@ local function MatchLootRollLine(rawText)
                         rollNumber = num
                         rollArgIdx = idx
                     end
-                elseif restored:find("|Hitem:", 1, true) or restored:find("|h%[") then
+                elseif not restored:find("|Hplayer:", 1, true) and (restored:find("|Hitem:", 1, true) or restored:find("|h%[")) then
                     itemLink = itemLink or restored
                 else
                     if idx and not playerName and restored ~= "" then
@@ -2001,6 +2097,12 @@ local function MatchLootRollLine(rawText)
                 end
             end
             return pat, lootHistoryID, itemLink, playerName, rollNumber
+        end
+    end
+    if lootHistoryID and masked:match("^%s*\001L1\001%s*$") then
+        local firstLink = savedLinks[1]
+        if type(firstLink) == "string" and firstLink:find("|Hitem:", 1, true) then
+            return { kind = "start" }, lootHistoryID, firstLink
         end
     end
     return nil
@@ -2150,6 +2252,13 @@ local function ProcessLootChatLine(rawText, lineID)
         CacheChatDecision(lineID, res)
         return res
     end
+    if pat.kind == "start" then
+        local entry = FindOrCreateEntryForChat(itemLink, lootHistoryID, nil, false, false)
+        local res = { action = "intermediate", entry = entry }
+        CacheChatDecision(lineID, res)
+        RefreshHistoryUI()
+        return res
+    end
     if pat.kind == "select" or pat.kind == "roll" then
         local entry = FindOrCreateEntryForChat(itemLink, lootHistoryID, playerName, pat.kind == "roll", false)
         RecordParticipant(entry, playerName, pat.choice, rollNumber, pat.isSelf)
@@ -2224,28 +2333,41 @@ local function LootChatFilter(chatFrame, _, msg, ...)
     if not db or (not db.groupRollChat and not db.chatRollButton) then
         return false
     end
-    if (issecretvalue and issecretvalue(msg)) or (canaccessvalue and not canaccessvalue(msg)) or type(msg) ~= "string" then
+    local cleanMsg = Plain(msg)
+    if type(cleanMsg) ~= "string" then
         return false
     end
+    filterCalls = filterCalls + 1
+    lastFilterRaw = cleanMsg
     local lineID = Plain(select(10, ...))
-    local ok, res = pcall(ProcessChatMessageDeduplicated, chatFrame, msg, lineID)
-    if not ok or not res then
+    local ok, res = pcall(ProcessChatMessageDeduplicated, chatFrame, cleanMsg, lineID)
+    if not ok then
+        lastFilterError = tostring(res)
+        lastFilterAction = "error"
         return false
     end
+    if not res then
+        lastFilterAction = "none"
+        return false
+    end
+    lastFilterAction = res.action or "none"
     if res.action == "intermediate" then
+        lastMatchKind = "intermediate"
         if db.groupRollChat then
             return true
         end
         return false
     end
     if res.action == "outcome" and res.entry then
+        lastMatchKind = "outcome"
         if db.groupRollChat then
             return false, FormatEntryChatText(res.entry), ...
         elseif db.chatRollButton then
             local btn = " |Haddon:rwmf:open:" .. res.entry.id .. "|h|cff66ccff[" .. L.ROLLS_BTN .. "]|r|h"
-            return false, msg .. btn, ...
+            return false, cleanMsg .. btn, ...
         end
     end
+    lastMatchKind = res.action
     return false
 end
 
@@ -2301,15 +2423,64 @@ local function HandleCustomHyperlink(link)
     end
 end
 
+local FILTER_RETRY_DELAYS = { 0.1, 0.25, 0.5, 1, 2, 3, 5, 5, 5, 5 }
+
+local function TryInstallChatFilter()
+    if chatFilterInstalled then
+        return true
+    end
+    local installed = false
+    if ChatFrameUtil and type(ChatFrameUtil.AddMessageEventFilter) == "function" then
+        local ok, err = pcall(ChatFrameUtil.AddMessageEventFilter, "CHAT_MSG_LOOT", LootChatFilter)
+        if ok then
+            installed = true
+            lastFilterError = nil
+        else
+            lastFilterError = tostring(err)
+        end
+    end
+    if not installed and type(ChatFrame_AddMessageEventFilter) == "function" then
+        local ok, err = pcall(ChatFrame_AddMessageEventFilter, "CHAT_MSG_LOOT", LootChatFilter)
+        if ok then
+            installed = true
+            lastFilterError = nil
+        elseif not lastFilterError then
+            lastFilterError = tostring(err)
+        end
+    end
+    if installed then
+        chatFilterInstalled = true
+        filterRetryScheduled = false
+        return true
+    end
+    return false
+end
+
+local function ScheduleFilterRetry()
+    if chatFilterInstalled or filterRetryScheduled then
+        return
+    end
+    if not (C_Timer and C_Timer.After) then
+        return
+    end
+    if filterRetryCount >= #FILTER_RETRY_DELAYS then
+        return
+    end
+    filterRetryCount = filterRetryCount + 1
+    filterRetryScheduled = true
+    local delay = FILTER_RETRY_DELAYS[filterRetryCount]
+    C_Timer.After(delay, function()
+        filterRetryScheduled = false
+        if not TryInstallChatFilter() then
+            ScheduleFilterRetry()
+        end
+    end)
+end
+
 InstallChatIntegrations = function()
     if not chatFilterInstalled then
-        local addFilter = (ChatFrameUtil and ChatFrameUtil.AddMessageEventFilter) or ChatFrame_AddMessageEventFilter
-        if type(addFilter) == "function" then
-            local ok = pcall(addFilter, "CHAT_MSG_LOOT", LootChatFilter)
-            if not ok and ChatFrame_AddMessageEventFilter and addFilter ~= ChatFrame_AddMessageEventFilter then
-                ok = pcall(ChatFrame_AddMessageEventFilter, "CHAT_MSG_LOOT", LootChatFilter)
-            end
-            chatFilterInstalled = ok and true or false
+        if not TryInstallChatFilter() then
+            ScheduleFilterRetry()
         end
     end
     if not chattynatorModifierInstalled and Chattynator and Chattynator.API and Chattynator.API.AddModifier then
@@ -3149,7 +3320,53 @@ local function PrintHelp()
     print("  /rollmove combat - toggle hide in combat")
     print("  /rollmove minimap - toggle minimap button")
     print("  /rollmove test [1-10] - preview test roll windows")
+    print("  /rollmove debug - show loot filter & parser diagnostics")
     print("  /rollmove reset - restore default position and settings")
+end
+
+local function EscapePipes(text)
+    if type(text) ~= "string" then
+        return tostring(text)
+    end
+    return (text:gsub("|", "||"))
+end
+
+local function PrintDebugInfo()
+    local function IsInFilterList()
+        local getFilters = (ChatFrameUtil and ChatFrameUtil.GetMessageEventFilters) or ChatFrame_GetMessageEventFilters
+        if type(getFilters) ~= "function" then
+            return "no-getter"
+        end
+        local ok, list = pcall(getFilters, "CHAT_MSG_LOOT")
+        if not ok or type(list) ~= "table" then
+            return "err"
+        end
+        for _, fn in pairs(list) do
+            if fn == LootChatFilter then
+                return "yes (" .. #list .. " total)"
+            end
+        end
+        return "no (" .. #list .. " total)"
+    end
+    local pats = GetRollPatterns()
+    Print("debug:")
+    print("  filterInstalled=" .. tostring(chatFilterInstalled)
+        .. ", inList=" .. IsInFilterList()
+        .. ", retries=" .. tostring(filterRetryCount)
+        .. ", chattynator=" .. tostring(chattynatorModifierInstalled))
+    print("  lastErr=" .. EscapePipes(lastFilterError or "none")
+        .. ", calls=" .. tostring(filterCalls)
+        .. ", action=" .. tostring(lastFilterAction or "none")
+        .. ", match=" .. tostring(lastMatchKind or "none"))
+    print("  patterns=" .. tostring(#pats)
+        .. ", activeEntries=" .. tostring(#activeRollEntries)
+        .. ", self=" .. tostring(PlayerSelfName()))
+    print("  GREED=" .. EscapePipes(_G.LOOT_ROLL_GREED))
+    print("  ROLLED_GREED=" .. EscapePipes(_G.LOOT_ROLL_ROLLED_GREED))
+    print("  WON=" .. EscapePipes(_G.LOOT_ROLL_WON))
+    if lastFilterRaw then
+        print("  lastRaw=" .. EscapePipes(lastFilterRaw))
+    end
 end
 
 SLASH_ROLLWINDOWMOVERFOREVER1 = "/rollmove"
@@ -3197,6 +3414,8 @@ SlashCmdList.ROLLWINDOWMOVERFOREVER = function(input)
         ToggleSettings()
     elseif command == "history" or command == "log" or command == "rolls" then
         ToggleHistoryWindow()
+    elseif command == "debug" then
+        PrintDebugInfo()
     elseif command == "chatgroup" then
         db.groupRollChat = not db.groupRollChat
         Print("group roll spam: " .. (db.groupRollChat and "|cff33ff99enabled|r" or "|cffff3333disabled|r"))
@@ -3408,6 +3627,9 @@ events:SetScript("OnEvent", function(self, event, arg1, arg2)
             end
         end
     elseif event == "START_LOOT_ROLL" then
+        if not chatFilterInstalled and db then
+            InstallChatIntegrations()
+        end
         local rollID = arg1
         local rollTime = arg2
         if rollID and not IsTestRoll(rollID) then
